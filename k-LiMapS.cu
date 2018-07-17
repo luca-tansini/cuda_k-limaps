@@ -125,7 +125,3 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
     CHECK(cudaMemcpy(alpha, d_alpha, m*sizeof(float), cudaMemcpyHostToDevice));
 
 }
-
-int main(){
-    return 0;
-}
