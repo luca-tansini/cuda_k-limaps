@@ -1,4 +1,5 @@
 #include "k-LiMapS.cu"
+#include "matrixPrint.h"
 #include <cusolverDn.h>
 
 /*
@@ -30,50 +31,57 @@ void MoorePenroseInverse(float *A, int n, int m, float *Apseudoinv){
     float *U,*S,*V_T;
     CHECK(cudaMalloc(&U, m*m*sizeof(float)));
     //S that should be a diagonal matrix is returned as a simple vector instead
-    CHECK(cudaMalloc(&S, m*sizeof(float)));
+    CHECK(cudaMalloc(&S, n*sizeof(float)));
     CHECK(cudaMalloc(&V_T, n*n*sizeof(float)));
 
     //Calculate SVD (of A^T, we will have to do some considerations on our results)
-    int success=0;
-    CHECK_CUSOLVER(cusolverDnSgesvd(cusolverHandle, 'A', 'A', m, n, Apseudoinv, m, S, U, m, V_T, n, buffer, bufferDim, NULL, &success));
+    int *dev_info, h_dev_info;
+    CHECK(cudaMalloc(&dev_info, sizeof(int)));
+    CHECK_CUSOLVER(cusolverDnSgesvd(cusolverHandle, 'A', 'A', m, n, Apseudoinv, m, S, U, m, V_T, n, buffer, bufferDim, NULL, dev_info));
 
-    if(success == 0)
+    CHECK(cudaMemcpy(&h_dev_info, dev_info, sizeof(int), cudaMemcpyDeviceToHost));
+    if(h_dev_info == 0)
         printf("Success!\n");
     else
-        printf("Something went wrong (dev_info=%d)\n",success);
+        printf("Something went wrong (dev_info=%d)\n", h_dev_info);
 
-    //DEBUG
+    //DEBUG PRINT
     //retrieve results
     float *h_U, *h_S, *h_V_T;
 
     CHECK(cudaMallocHost(&h_U,m*m*sizeof(float)));
-    CHECK(cudaMemcpy(h_U, U, m*m*sizeof(float), cudaMemcpyDeviceToHost));
-    printf("\nU (%d*%d):\n",m,m);
-    int i;
-    for(i=0;i<m*m;i++)
-        printf("%.3f ", h_U[i]);
+    CHECK(cudaMallocHost(&h_S,n*sizeof(float)));
+    CHECK(cudaMallocHost(&h_V_T,n*n*sizeof(float)));
 
-    CHECK(cudaMallocHost(&h_S,m*sizeof(float)));
-    CHECK(cudaMemcpy(h_S, S, m*sizeof(float), cudaMemcpyDeviceToHost));
-    printf("\nS (%d):\n",m);
-    for(i=0;i<m;i++)
+    CHECK(cudaMemcpy(h_U, U, m*m*sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(h_S, S, n*sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(h_V_T, V_T, n*n*sizeof(float), cudaMemcpyDeviceToHost));
+
+    printf("\n\nU (%d*%d):\n\n",m,m);
+    printColumnMajorMatrix(h_U,m,m);
+
+    printf("\n\nS (%d):\n\n",n);
+    for(int i=0;i<n;i++)
         printf("%.3f ", h_S[i]);
 
-    CHECK(cudaMallocHost(&h_V_T,n*n*sizeof(float)));
-    CHECK(cudaMemcpy(h_V_T, V_T, n*n*sizeof(float), cudaMemcpyDeviceToHost));
-    printf("\nV_T (%d*%d):\n",n,n);
-    for(i=0;i<n*n;i++)
-        printf("%.3f ", h_V_T[i]);
+    printf("\n\nV_T (%d*%d):\n\n",n,n);
+    printColumnMajorMatrix(h_V_T, n, n);
 
+    printf("\n");
     //END DEBUG
 
 }
 
-int main(){
+int main(int argc, char **argv){
+
+    if(argc != 3){
+        printf("usage: simpleTest n k\n");
+        exit(2);
+    }
 
     int n,k,m,i,j;
-    n = 10;
-    k = 5;
+    n = atoi(argv[1]);
+    k = atoi(argv[2]);
     m = n*k;
 
     srand(time(NULL));
@@ -96,18 +104,10 @@ int main(){
 
     //DEBUG
     printf("theta:\n");
-    printf("[");
-    for(i=0; i<n*m; i++){
-        if(i%m==0)
-            printf("[%.3f,",theta[i]);
-        else if(i == n*m-1)
-            printf("%.3f]",theta[i]);
-        else if((i+1)%m==0)
-            printf("%.3f],",theta[i]);
-        else
-            printf("%.3f,",theta[i]);
-    }
-    printf("]\n");
+    printColumnMajorMatrix(theta, n, m);
+
+    printf("theta for Python use:\n");
+    printColumnMajorMatrixForPython(theta, n, m);
     //END DEBUG
 
     //MoorePenroseInverse

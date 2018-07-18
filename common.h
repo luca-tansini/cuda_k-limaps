@@ -27,17 +27,38 @@
     }                                                                          \
 }
 
-#define CHECK_CUSOLVER(call)                                                     \
-{                                                                              \
-    cusolverStatus_t err;                                                        \
-    if ((err = (call)) != CUSOLVER_STATUS_SUCCESS)                               \
-    {                                                                          \
-        fprintf(stderr, "Got CUSOLVER error %d at %s:%d\n", err, __FILE__,       \
+#define CHECK_CUSOLVER(call)                                                    \
+{                                                                               \
+    cusolverStatus_t err;                                                       \
+    if ((err = (call)) != CUSOLVER_STATUS_SUCCESS)                              \
+    {                                                                           \
+        fprintf(stderr, "Got CUSOLVER error %d at %s:%d\n", err, __FILE__,      \
                 __LINE__);                                                      \
-        if(err == CUSOLVER_STATUS_INTERNAL_ERROR)                                                                                                                             \
-        fprintf(stderr, "CUSOLVER_STATUS_INTERNAL_ERROR\n");  \
-        exit(1);                                                               \
-    }                                                                          \
+        switch (err) {                                                          \
+            case CUSOLVER_STATUS_NOT_INITIALIZED:                               \
+                printf("CUSOLVER_STATUS_NOT_INITIALIZED\n");                    \
+                break;                                                          \
+            case CUSOLVER_STATUS_ALLOC_FAILED:                                  \
+                printf("CUSOLVER_STATUS_ALLOC_FAILED\n");                       \
+                break;                                                          \
+            case CUSOLVER_STATUS_INVALID_VALUE:                                 \
+                printf("CUSOLVER_STATUS_INVALID_VALUE\n");                      \
+                break;                                                          \
+            case CUSOLVER_STATUS_ARCH_MISMATCH:                                 \
+                printf("CUSOLVER_STATUS_ARCH_MISMATCH\n");                      \
+                break;                                                          \
+            case CUSOLVER_STATUS_EXECUTION_FAILED:                              \
+                printf("CUSOLVER_STATUS_EXECUTION_FAILED\n");                   \
+                break;                                                          \
+            case CUSOLVER_STATUS_INTERNAL_ERROR:                                \
+                printf("CUSOLVER_STATUS_INTERNAL_ERROR\n");                     \
+                break;                                                          \
+            case CUSOLVER_STATUS_MATRIX_TYPE_NOT_SUPPORTED:                     \
+                printf("CUSOLVER_STATUS_MATRIX_TYPE_NOT_SUPPORTED\n");          \
+                break;                                                          \
+        }                                                                       \
+        exit(1);                                                                \
+    }                                                                           \
 }
 
 #define CHECK_CURAND(call)                                                     \
