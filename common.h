@@ -27,6 +27,19 @@
     }                                                                          \
 }
 
+#define CHECK_CUSOLVER(call)                                                     \
+{                                                                              \
+    cusolverStatus_t err;                                                        \
+    if ((err = (call)) != CUSOLVER_STATUS_SUCCESS)                               \
+    {                                                                          \
+        fprintf(stderr, "Got CUSOLVER error %d at %s:%d\n", err, __FILE__,       \
+                __LINE__);                                                      \
+        if(err == CUSOLVER_STATUS_INTERNAL_ERROR)                                                                                                                             \
+        fprintf(stderr, "CUSOLVER_STATUS_INTERNAL_ERROR\n");  \
+        exit(1);                                                               \
+    }                                                                          \
+}
+
 #define CHECK_CURAND(call)                                                     \
 {                                                                              \
     curandStatus_t err;                                                        \
