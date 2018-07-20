@@ -57,7 +57,7 @@
                 printf("CUSOLVER_STATUS_MATRIX_TYPE_NOT_SUPPORTED\n");          \
                 break;                                                          \
         }                                                                       \
-        exit(1);                                                                \
+        /*exit(1);*/                                                                \
     }                                                                           \
 }
 

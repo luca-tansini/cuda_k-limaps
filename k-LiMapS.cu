@@ -35,7 +35,7 @@ __global__ void vectorSum(float alpha, float *a, float beta, float *b, float *re
 __global__ void thresholding(float *v, int len, float threshold){
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     if(tid < len)
-        if(abs(v[tid]) < threshold)
+        if(fabsf(v[tid]) < threshold)
             v[tid] = 0;
 }
 
@@ -81,8 +81,8 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
     CHECK(cudaMalloc(&d_beta, m*sizeof(float)));
     int i = 0;
     dim3 dimBlock(BLOCK_SIZE,1,1);
-    dim3 dimGridM(ceil(m/BLOCK_SIZE),1,1);
-    dim3 dimGridN(ceil(n/BLOCK_SIZE),1,1);
+    dim3 dimGridM(ceil(m*1.0/BLOCK_SIZE),1,1);
+    dim3 dimGridN(ceil(n*1.0/BLOCK_SIZE),1,1);
 
     while(i < maxIter){
 

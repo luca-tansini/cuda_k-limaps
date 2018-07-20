@@ -1,13 +1,46 @@
 import numpy as np
+import sys
 
-a = [[0.782,0.195,0.264],[0.902,0.477,0.718],[0.491,0.593,0.069],[0.037,0.932,0.421],[0.977,0.716,0.709],[0.541,0.021,0.934],[0.739,0.585,0.904]]
-a = np.matrix(a)
-print(a,end="\n\n")
-U, s, V = np.linalg.svd(a, full_matrices=True)
-#V is actually VH and s is only a vector, we have to create the diag matrix
-S = np.zeros((7,3))
-S[:3, :3] = np.diag(s)
-print(U,end="\n\n")
-print(S,end="\n\n")
-print(V,end="\n\n")
-print(U*S*V,end="\n\n")
+n = int(sys.argv[1])
+k = int(sys.argv[2])
+m = n*k
+
+A = np.random.rand(n,m)
+A = np.matrix(A)
+print("A: matrix [{0}x{1}]".format(n,m))
+T = A.transpose()
+print("T = A^T (A transpose)")
+U, s, V = np.linalg.svd(A, full_matrices=True)
+print("SVD(A) = U * S * V")
+Ut, st, Vt = np.linalg.svd(T, full_matrices=True)
+print("SVD(T) = Ut * St * Vt")
+
+print("U == Vt ?: ",end='')
+print(np.allclose(U,Vt.transpose()), end = ', ')
+print("in absolute values: ",end='')
+print(np.allclose(np.absolute(U),np.absolute(Vt.transpose())))
+
+print("s == st ?: ",end='')
+print(np.allclose(s,st))
+
+print("V == Ut ?: ",end='')
+print(np.allclose(V,Ut.transpose()), end = ', ')
+print("in absolute values: ",end='')
+print(np.allclose(np.absolute(V),np.absolute(Ut.transpose())))
+
+#rebuild1
+S = np.zeros((n,m))
+S[:min(n,m), :min(n,m)] = np.diag(s)
+rebuild1 = U * S * V
+
+#rebuild2
+St = np.zeros((n,m))
+St[:min(n,m), :min(n,m)] = np.diag(st)
+rebuild2 = Vt.transpose() * St * Ut.transpose()
+
+print("U * S * V == Vt^T * St * Ut^T ?: ",end='')
+print(np.allclose(rebuild1, rebuild2))
+
+print("s:")
+print(s.shape)
+print(s)
