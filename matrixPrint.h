@@ -1,5 +1,8 @@
 #include <stdio.h>
 
+#define ANSI_COLOR_RED   "\x1b[31m"
+#define ANSI_COLOR_RESET "\x1b[0m"
+
 void printColumnMajorMatrix(float *A, int nrows, int ncols){
     int i,j;
     for(i=0; i<nrows; i++){
@@ -25,4 +28,14 @@ void printColumnMajorMatrixForPython(float *A, int nrows, int ncols){
             printf("],");
     }
     printf("]\n\n");
+}
+
+void printHighlightedVector(float *v, int len){
+    int i;
+    for(i=0; i<len; i++)
+        if(v[i] != 0)
+            printf(ANSI_COLOR_RED "%.3f " ANSI_COLOR_RESET, v[i]);
+        else
+            printf("0.000 ");
+    printf("\n");
 }

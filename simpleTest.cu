@@ -1,5 +1,4 @@
 #include "k-LiMapS.cu"
-#include "matrixPrint.h"
 #include <float.h>
 #include <cusolverDn.h>
 
@@ -37,16 +36,16 @@ So we can compute A^+ as
 U1^T * S1^+ * V_T1
 
 */
-void MoorePenroseInverse(float *A, int n, int m, float *Apseudoinv){
+void MoorePenroseInverse(float *A, int n, int m, float *APseudoInv){
 
     cusolverDnHandle_t cusolverHandle;
     cublasHandle_t cublasHandle;
     CHECK_CUSOLVER(cusolverDnCreate(&cusolverHandle));
     CHECK_CUBLAS(cublasCreate(&cublasHandle));
 
-    //transpose matrix A
+    //transpose matrix A into APseudoInv
     float alpha=1,beta=0;
-    CHECK_CUBLAS(cublasSgeam(cublasHandle, CUBLAS_OP_T, CUBLAS_OP_N, n, m, &alpha, A, m, &beta, A, n, Apseudoinv, n));
+    CHECK_CUBLAS(cublasSgeam(cublasHandle, CUBLAS_OP_T, CUBLAS_OP_N, n, m, &alpha, A, m, &beta, A, n, APseudoInv, n));
 
     //Get dimension needed for the workspace buffer and allocate it
     int bufferDim;
@@ -63,7 +62,7 @@ void MoorePenroseInverse(float *A, int n, int m, float *Apseudoinv){
     //Calculate SVD with cuSOLVER
     int *dev_info, h_dev_info;
     CHECK(cudaMalloc(&dev_info, sizeof(int)));
-    CHECK_CUSOLVER(cusolverDnSgesvd(cusolverHandle, 'A', 'A', m, n, Apseudoinv, m, S1, U1, m, V_T1, n, buffer, bufferDim, NULL, dev_info));
+    CHECK_CUSOLVER(cusolverDnSgesvd(cusolverHandle, 'A', 'A', m, n, APseudoInv, m, S1, U1, m, V_T1, n, buffer, bufferDim, NULL, dev_info));
     CHECK(cudaMemcpy(&h_dev_info, dev_info, sizeof(int), cudaMemcpyDeviceToHost));
     if(h_dev_info != 0)
         printf("Something went wrong (dev_info=%d)\n", h_dev_info);
@@ -105,12 +104,17 @@ void MoorePenroseInverse(float *A, int n, int m, float *Apseudoinv){
     cudaFreeHost(h_S1PseudoInv);
     //END DEBUG ********************************/
 
-    //calculate U1^T * S1^+ * V_T1
+    //calculate APseudoInv = U1^T * S1^+ * V_T1
+    //APseudoInv = U1^T * S1^+
+    CHECK_CUBLAS(cublasSgemm(cublasHandle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, m, &alpha, U1, m, S1PseudoInv, m, &beta, APseudoInv, m));
+    //APseudoInv *= V_T1
+    CHECK_CUBLAS(cublasSgemm(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, n, &alpha, APseudoInv, m, V_T1, n, &beta, APseudoInv, m));
 
     //Free memory
     CHECK(cudaFree(buffer));
     CHECK(cudaFree(U1));
     CHECK(cudaFree(S1));
+    CHECK(cudaFree(S1PseudoInv));
     CHECK(cudaFree(V_T1));
 
 }
@@ -134,7 +138,6 @@ int main(int argc, char **argv){
     CHECK(cudaMallocHost(&theta, n*m*sizeof(float)));
     for(i=0; i<n*m; i++)
         theta[i] = rand()/(float)RAND_MAX;
-
 
     //Fill optimal solution alpha with k random values
     float *alpha;
@@ -163,16 +166,55 @@ int main(int argc, char **argv){
     CHECK(cudaMalloc(&d_thetaPseudoInv, m*n*sizeof(float)));
     MoorePenroseInverse(d_theta, n, m, d_thetaPseudoInv);
 
-    //Calbulate b = theta * alpha
+    float *thetaPseudoInv;
+    CHECK(cudaMallocHost(&thetaPseudoInv, m*n*sizeof(float)));
+    CHECK(cudaMemcpy(thetaPseudoInv, d_thetaPseudoInv, m*n*sizeof(float), cudaMemcpyDeviceToHost));
+    
+    //DEBUG MOORE PENROSE RESULT
+
+    //END DEBUG
+
+    //Calculate b = theta * alpha
+    float *d_b,*d_alpha,cualpha=1,cubeta=0;
+    cublasHandle_t cublasHandle;
+
+    CHECK(cudaMalloc(&d_b, n*sizeof(float)));
+    CHECK(cudaMalloc(&d_alpha, m*sizeof(float)));
+    CHECK(cudaMemcpy(d_alpha, alpha, m*sizeof(float), cudaMemcpyHostToDevice));
+
+    CHECK_CUBLAS(cublasCreate(&cublasHandle));
+    CHECK_CUBLAS(cublasSgemv(cublasHandle, CUBLAS_OP_N, n, m, &cualpha, d_theta, n, d_alpha, 1, &cubeta, d_b, 1));
 
     //call k_LiMapS
 
+    //For compatibility with future use, k_LiMapS parameters are supposed to be host memory pointers, so we need to transfer MoorePenroseInverse result and d_b into host memory
+    float *b, *limapsAlpha;
+    CHECK(cudaMallocHost(&b, n*sizeof(float)));
+    CHECK(cudaMemcpy(b, d_b, n*sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(cudaMallocHost(&limapsAlpha, m*sizeof(float)));
+
+    k_LiMapS(k, theta, n, m, thetaPseudoInv, d_b, limapsAlpha, 10);
+
     //Check result
+
+    //DEBUG PRINT ***************************
+    printf("alpha:\n");
+    printHighlightedVector(alpha, m);
+
+    printf("\nlimapsAlpha:\n");
+    printHighlightedVector(limapsAlpha, m);
+    //END DEBUG ******************************
 
     //Free memory
     CHECK(cudaFreeHost(theta));
     CHECK(cudaFreeHost(alpha));
+    CHECK(cudaFreeHost(limapsAlpha));
+    CHECK(cudaFreeHost(thetaPseudoInv));
     CHECK(cudaFree(d_theta));
+    CHECK(cudaFree(d_alpha));
+    CHECK(cudaFree(d_thetaPseudoInv));
+    CHECK(cudaFree(d_b));
+    cudaDeviceReset();
 
     return 0;
 

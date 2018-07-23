@@ -3,6 +3,7 @@
 #include <math.h>
 #include "cublas_v2.h"
 #include "common.h"
+#include "matrixPrint.h"
 
 #define BLOCK_SIZE 256
 
@@ -75,6 +76,15 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
     float cuAlpha = 1, cuBeta = 0;
     CHECK_CUBLAS(cublasSgemv(handle, CUBLAS_OP_N, m, n, &cuAlpha, d_thetaPseudoInv, m, d_b, 1, &cuBeta, d_alpha, 1));
 
+    //DEBUG PRINT
+    float *h_alpha;
+    CHECK(cudaMallocHost(&h_alpha, m*sizeof(float), cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(h_alpha, d_alpha, m*sizeof(float), cudaMemcpyHostToDevice))
+    printf("initial alpha (= thetaPseudoInv * b):\n");
+    printHighlightedVector(h_alpha, m);
+    CHECK(cudaFreeHost(h_alpha));
+    //END DEBUG
+
     //algorithm internal loop
     float sigma[m];
     float *d_beta;
@@ -123,5 +133,7 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
     thresholding<<<dimGridM,dimBlock>>>(d_alpha, m, sigma[k]);
     CHECK(cudaDeviceSynchronize());
     CHECK(cudaMemcpy(alpha, d_alpha, m*sizeof(float), cudaMemcpyHostToDevice));
+
+    //Free Memory
 
 }
