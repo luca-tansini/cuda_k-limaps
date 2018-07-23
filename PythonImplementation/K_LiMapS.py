@@ -24,12 +24,12 @@ def k_LiMapS(k, theta, thetaPseudoInv, b, maxIter):
 
     #algorithm internal loop
     i = 0;
-
     while(i < maxIter):
 
         #1b. sort sigma in descending order
+        oldalpha = alpha
         alpha = alpha.transpose().tolist()[0]
-        sigma = sorted(alpha)[::-1]
+        sigma = sorted(np.abs(alpha))[::-1]
 
         #2. calculate lambda = 1/sigma[k]
         lambdaK = 1/sigma[k];
@@ -43,6 +43,9 @@ def k_LiMapS(k, theta, thetaPseudoInv, b, maxIter):
 
         #loop conditions update
         i+=1;
+        if(np.linalg.norm(alpha-oldalpha) < 1e-6):
+            print(i)
+            break
 
     #final thresholding step: alpha[i] = 0 if |alpha[i]| <= sigma[k]
     for i in range(len(alpha)):
@@ -50,33 +53,3 @@ def k_LiMapS(k, theta, thetaPseudoInv, b, maxIter):
             alpha[i] = 0
 
     return alpha
-
-#Test with b obtained as b = theta * alpha
-def k_LiMapS_noiselessTest(n,k,maxIter):
-
-    #Randomly generate dictionary
-    m = n*k
-    theta = np.matrix(np.random.rand(n,m))
-    print("\ntheta:")
-    print(theta)
-
-    #Calculate dictionary pseudoinv
-    thetaPseudoInv = MoorePenrosePseudoInverse(theta,n,m)
-    print("\nthetaPseudoInv: ")
-    print(thetaPseudoInv)
-
-    #Randomly generate optimal solution alpha
-    values = np.random.rand(k)
-    alpha = np.append(values,np.zeros(m-k))
-    np.random.shuffle(alpha)
-    alpha = np.matrix(alpha).transpose()
-    print("\nalpha:")
-    print(alpha)
-
-    #Calculate b = theta * alpha
-    b = theta * alpha
-
-    #Call k_LiMapS
-    limapsSolution = k_LiMapS(k, theta, thetaPseudoInv, b, maxIter)
-    print("\nlimapsSolution:")
-    print(limapsSolution)
