@@ -44,7 +44,7 @@ def k_LiMapS(k, theta, thetaPseudoInv, b, maxIter):
         #loop conditions update
         i+=1;
         if(np.linalg.norm(alpha-oldalpha) < 1e-6):
-            print(i)
+            #print(i)
             break
 
     #final thresholding step: alpha[i] = 0 if |alpha[i]| <= sigma[k]
