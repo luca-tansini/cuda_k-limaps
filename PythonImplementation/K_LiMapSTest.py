@@ -21,7 +21,7 @@ def k_LiMapS_noiselessTest(n,k,maxIter):
 
     #Randomly generate dictionary
     m = n*k
-    theta = np.matrix(np.random.rand(n,m))
+    theta = np.random.rand(n,m)
 
     #Calculate dictionary pseudoinv
     thetaPseudoInv = MoorePenrosePseudoInverse(theta,n,m)
@@ -30,12 +30,11 @@ def k_LiMapS_noiselessTest(n,k,maxIter):
     values = np.random.rand(k)
     alpha = np.append(values,np.zeros(m-k))
     np.random.shuffle(alpha)
-    alpha = np.matrix(alpha).transpose()
     #print("\nalpha:")
     #print(alpha)
 
     #Calculate b = theta * alpha
-    b = theta * alpha
+    b = theta @ alpha
 
     #Call k_LiMapS
     limapsSolution = k_LiMapS(k, theta, thetaPseudoInv, b, maxIter)

@@ -11,16 +11,19 @@ def MoorePenrosePseudoInverse(A,n,m):
     S = [ 1/x if abs(x) > np.finfo(float).eps else 0 for x in s]
     SPseudoInv = np.zeros((n,m))
     SPseudoInv[:min(n,m), :min(n,m)] = np.diag(S)
-    SPseudoInv = np.matrix(SPseudoInv).transpose()
+    SPseudoInv = SPseudoInv.transpose()
 
-    return V_T.transpose() * SPseudoInv * U.transpose()
+    return V_T.transpose() @ SPseudoInv @ U.transpose()
 
+#Function implementing the F-lambda shrinkage
+def F(x,lambdak):
+    return x * (1-np.exp(-lambdak*abs(x)))
 
 #Function implementing k-LiMapS algorithm
 def k_LiMapS(k, theta, thetaPseudoInv, b, maxIter):
 
     #calculate initial alpha = thetaPseudoInv * b
-    alpha = thetaPseudoInv * b
+    alpha = thetaPseudoInv @ b
 
     #algorithm internal loop
     i = 0;
@@ -28,18 +31,16 @@ def k_LiMapS(k, theta, thetaPseudoInv, b, maxIter):
 
         #1b. sort sigma in descending order
         oldalpha = alpha
-        alpha = alpha.transpose().tolist()[0]
         sigma = sorted(np.abs(alpha))[::-1]
 
         #2. calculate lambda = 1/sigma[k]
-        lambdaK = 1/sigma[k];
+        lambdak = 1/sigma[k];
 
         #3. calculate beta = F(lambda, alpha)
-        beta = [x * (1-np.exp(-lambdaK*abs(x))) for x in alpha]
-        beta = np.matrix(beta).transpose()
+        beta = F(alpha,lambdak)
 
         #4. update alpha = beta - thetaPseudoInv * (theta * beta - b)
-        alpha = beta - thetaPseudoInv * (theta * beta - b)
+        alpha = beta - thetaPseudoInv @ (theta @ beta - b)
 
         #loop conditions update
         i+=1;

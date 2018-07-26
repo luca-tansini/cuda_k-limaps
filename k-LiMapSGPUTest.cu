@@ -1,6 +1,10 @@
 #include "k-LiMapS.cu"
 #include "MoorePenrose.cu"
 
+/*
+This main tests the k-LiMapS algorithm generating the dictionary and its pseudoinverse in GPU.
+At the moment MoorePenrose.cu has proven wrong (due to the limitation of the cuSOLVER libraries)
+*/
 int main(int argc, char **argv){
 
     if(argc != 3){

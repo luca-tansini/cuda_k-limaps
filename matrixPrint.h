@@ -7,7 +7,7 @@ void printColumnMajorMatrix(float *A, int nrows, int ncols){
     int i,j;
     for(i=0; i<nrows; i++){
         for(j=0; j<ncols; j+=1)
-            printf("%.3f ", A[j*nrows + i]);
+            printf("%.5f ", A[j*nrows + i]);
         printf("\n");
     }
 }
@@ -19,9 +19,9 @@ void printColumnMajorMatrixForPython(float *A, int nrows, int ncols){
         printf("[");
         for(j=0; j<ncols; j+=1)
             if(j == ncols-1)
-                printf("%.3f", A[j*nrows + i]);
+                printf("%.5f", A[j*nrows + i]);
             else
-                printf("%.3f,", A[j*nrows + i]);
+                printf("%.5f,", A[j*nrows + i]);
         if(i == nrows-1)
             printf("]");
         else
@@ -34,7 +34,7 @@ void printHighlightedVector(float *v, int len){
     int i;
     for(i=0; i<len; i++)
         if(v[i] != 0)
-            printf(ANSI_COLOR_RED "%.3f " ANSI_COLOR_RESET, v[i]);
+            printf(ANSI_COLOR_RED "%.5f " ANSI_COLOR_RESET, v[i]);
         else
             printf("0.000 ");
     printf("\n");

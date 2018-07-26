@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <unistd.h>
 #include <math.h>
 #include "cublas_v2.h"
 #include "common.h"
@@ -20,7 +21,7 @@ int comp(const void *elem1, const void *elem2) {
 __global__ void fShrinkage(float lambda, float *a, float *b, int len){
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     if(tid < len){
-        b[tid] = a[tid] * (1 - powf(M_E, -1*fabsf(a[tid])));
+        b[tid] = a[tid] * (1 - powf(M_E, -lambda*fabsf(a[tid])));
     }
 }
 
@@ -55,10 +56,8 @@ __global__ void vector2norm(float *v){
         step /= 2;
         __syncthreads();
     }
-    if(idx == 0){
-        printf("%d : %.5f\n",tid,p[idx]);
+    if(idx == 0)
         v[blockIdx.x] = p[idx];
-    }
 }
 
 /*
@@ -97,15 +96,6 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
     float cuAlpha = 1, cuBeta = 0;
     CHECK_CUBLAS(cublasSgemv(handle, CUBLAS_OP_N, m, n, &cuAlpha, d_thetaPseudoInv, m, d_b, 1, &cuBeta, d_alpha, 1));
 
-    //DEBUG PRINT
-    float *h_alpha;
-    CHECK(cudaMallocHost(&h_alpha, m*sizeof(float), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(h_alpha, d_alpha, m*sizeof(float), cudaMemcpyHostToDevice))
-    printf("initial alpha (= thetaPseudoInv * b):\n");
-    printHighlightedVector(h_alpha, m);
-    CHECK(cudaFreeHost(h_alpha));
-    //END DEBUG
-
     //algorithm internal loop
     int i = 0;
     int mBlocks = ceil(m*1.0/BLOCK_SIZE);
@@ -117,7 +107,13 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
 
     CHECK(cudaMalloc(&d_beta, m*sizeof(float)));
     CHECK(cudaMalloc(&d_oldalpha, mBlocks*BLOCK_SIZE*sizeof(float)));
-    CHECK(cudaMemset(oldalpha, 0, mBlocks*BLOCK_SIZE*sizeof(float)));
+    CHECK(cudaMemset(d_oldalpha, 0, mBlocks*BLOCK_SIZE*sizeof(float)));
+
+    /*//DEBUG ALLOCATIONS
+    float *beta;
+
+    CHECK(cudaMallocHost(&beta, m*sizeof(float)));
+    //END DEBUG*/
 
     while(i < maxIter){
 
@@ -128,12 +124,24 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
             sigma[j] = abs(sigma[j]);
         qsort(sigma, m, sizeof(float), comp);
 
+        /*//DEBUG SIGMA
+        printf("\nIter #%d:\n",i);
+        printf("sigma:\n");
+        printColumnMajorMatrix(sigma,1,m);
+        //END DEBUG*/
+
         //2. calculate lambda = 1/sigma[k]
         float lambda = 1/sigma[k];
 
         //3. calculate beta = F(lambda, alpha)
         fShrinkage<<<dimGridM,dimBlock>>>(lambda, d_alpha, d_beta, m);
         CHECK(cudaDeviceSynchronize());
+
+        /*//DEBUG BETA
+        CHECK(cudaMemcpy(beta, d_beta, m*sizeof(float), cudaMemcpyDeviceToHost));
+        printf("beta:\n");
+        printColumnMajorMatrix(beta,1,m);
+        //END DEBUG*/
 
         //4. update alpha = beta - thetaPseudoInv * (theta * beta - b)
         //using aplha for intermediate results (alpha has size m and m >> n)
@@ -156,7 +164,7 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
         CHECK(cudaDeviceSynchronize());
 
         //loop conditions update
-        vectorSum<<<dimGridM,dimBlock>>>(1, d_alpha, -1, d_oldalpha, d_alpha, m);
+        vectorSum<<<dimGridM,dimBlock>>>(1, d_alpha, -1, d_oldalpha, d_oldalpha, m);
         CHECK(cudaDeviceSynchronize());
         vector2norm<<<dimGridM,dimBlock>>>(d_oldalpha);
         CHECK(cudaDeviceSynchronize());
@@ -165,8 +173,12 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
         for(int j=0; j<mBlocks; j++)
             norm += partialNormBlocks[j];
         norm = sqrt(norm);
+        /*//DEBUG NORM
+        printf("norm:\n%f\n",norm);
+        sleep(1);
+        //END DEBUG*/
         if(norm < 1e-6){
-            print("\niter #%d\n", i);
+            //printf("\niter #%d\n", i);
             break;
         }
         i++;
