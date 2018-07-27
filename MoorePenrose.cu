@@ -65,20 +65,6 @@ void MoorePenroseInverse(float *A, int n, int m, float *APseudoInv){
     if(h_dev_info != 0)
         printf("Something went wrong (dev_info=%d)\n", h_dev_info);
 
-    /*//DEBUG PRINT *******************************
-    float *h_S1;
-
-    CHECK(cudaMallocHost(&h_S1,n*sizeof(float)));
-    CHECK(cudaMemcpy(h_S1, S1, n*sizeof(float), cudaMemcpyDeviceToHost));
-
-    printf("\n\nS [%d]:\n\n",n);
-    for(int i=0;i<n;i++)
-        printf("%.3f ", h_S1[i]);
-    printf("\n");
-
-    cudaFreeHost(h_S1);
-    //END DEBUG ********************************/
-
     //Calculate S1^+
     float *S1PseudoInv;
     CHECK(cudaMalloc(&S1PseudoInv, m*n*sizeof(float)));
@@ -88,19 +74,6 @@ void MoorePenroseInverse(float *A, int n, int m, float *APseudoInv){
     dim3 dimGrid(ceil(n*1.0/BLOCK_SIZE),1,1);
     calculateDiagPseudoInv<<<dimGrid,dimBlock>>>(S1, S1PseudoInv, n, m);
     CHECK(cudaDeviceSynchronize());
-
-    /*//DEBUG PRINT *******************************
-    float *h_S1PseudoInv;
-
-    CHECK(cudaMallocHost(&h_S1PseudoInv, m*n*sizeof(float)));
-    CHECK(cudaMemcpy(h_S1PseudoInv, S1PseudoInv, m*n*sizeof(float), cudaMemcpyDeviceToHost));
-
-    printf("\n\nS1 pseudoinverse [%dx%d]:\n\n", m, n);
-    printColumnMajorMatrix(h_S1PseudoInv, m, n);
-    printf("\n");
-
-    cudaFreeHost(h_S1PseudoInv);
-    //END DEBUG ********************************/
 
     //calculate APseudoInv = U1^T * S1^+ * V_T1
     //APseudoInv = U1^T * S1^+

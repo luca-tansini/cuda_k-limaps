@@ -37,14 +37,6 @@ int main(int argc, char **argv){
             alpha[j] = rand()/(float)RAND_MAX;
     }
 
-    /*//DEBUG PRINT
-    printf("theta:\n");
-    printColumnMajorMatrix(theta, n, m);
-
-    printf("theta for Python use:\n");
-    printColumnMajorMatrixForPython(theta, n, m);
-    //END DEBUG*/
-
     //calculate theta Moore-Penrose inverse
     float *d_theta,*d_thetaPseudoInv;
     CHECK(cudaMalloc(&d_theta, n*m*sizeof(float)));
@@ -78,14 +70,20 @@ int main(int argc, char **argv){
     k_LiMapS(k, theta, n, m, thetaPseudoInv, d_b, limapsAlpha, 10);
 
     //Check result
+    for(i=0; i<m; i++)
+        if(abs(alpha[i] - limapsAlpha[i]) > 1e-4)
+            break;
 
-    //DEBUG PRINT ***************************
-    printf("alpha:\n");
-    printHighlightedVector(alpha, m);
+    if(i < m){
+        printf("NOPE\n");
+        printf("\nalpha:\n");
+        printHighlightedVector(alpha, m);
 
-    printf("\nlimapsAlpha:\n");
-    printHighlightedVector(limapsAlpha, m);
-    //END DEBUG ******************************
+        printf("\nlimapsAlpha:\n");
+        printHighlightedVector(limapsAlpha, m);
+    }
+    else
+        printf("OK!\n");
 
     //Free memory
     CHECK(cudaFreeHost(theta));

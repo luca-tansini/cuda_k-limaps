@@ -109,12 +109,6 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
     CHECK(cudaMalloc(&d_oldalpha, mBlocks*BLOCK_SIZE*sizeof(float)));
     CHECK(cudaMemset(d_oldalpha, 0, mBlocks*BLOCK_SIZE*sizeof(float)));
 
-    /*//DEBUG ALLOCATIONS
-    float *beta;
-
-    CHECK(cudaMallocHost(&beta, m*sizeof(float)));
-    //END DEBUG*/
-
     while(i < maxIter){
 
         //1a. retrieve alpha into sigma
@@ -124,24 +118,12 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
             sigma[j] = abs(sigma[j]);
         qsort(sigma, m, sizeof(float), comp);
 
-        /*//DEBUG SIGMA
-        printf("\nIter #%d:\n",i);
-        printf("sigma:\n");
-        printColumnMajorMatrix(sigma,1,m);
-        //END DEBUG*/
-
         //2. calculate lambda = 1/sigma[k]
         float lambda = 1/sigma[k];
 
         //3. calculate beta = F(lambda, alpha)
         fShrinkage<<<dimGridM,dimBlock>>>(lambda, d_alpha, d_beta, m);
         CHECK(cudaDeviceSynchronize());
-
-        /*//DEBUG BETA
-        CHECK(cudaMemcpy(beta, d_beta, m*sizeof(float), cudaMemcpyDeviceToHost));
-        printf("beta:\n");
-        printColumnMajorMatrix(beta,1,m);
-        //END DEBUG*/
 
         //4. update alpha = beta - thetaPseudoInv * (theta * beta - b)
         //using aplha for intermediate results (alpha has size m and m >> n)
@@ -173,14 +155,8 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
         for(int j=0; j<mBlocks; j++)
             norm += partialNormBlocks[j];
         norm = sqrt(norm);
-        /*//DEBUG NORM
-        printf("norm:\n%f\n",norm);
-        sleep(1);
-        //END DEBUG*/
-        if(norm < 1e-6){
-            //printf("\niter #%d\n", i);
+        if(norm < 1e-6)
             break;
-        }
         i++;
     }
 
@@ -188,7 +164,5 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
     thresholding<<<dimGridM,dimBlock>>>(d_alpha, m, sigma[k]);
     CHECK(cudaDeviceSynchronize());
     CHECK(cudaMemcpy(alpha, d_alpha, m*sizeof(float), cudaMemcpyHostToDevice));
-
-    //Free memory
 
 }

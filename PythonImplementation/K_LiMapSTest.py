@@ -38,13 +38,6 @@ def k_LiMapS_noiselessTest(n,k,maxIter):
 
     #Call k_LiMapS
     limapsSolution = k_LiMapS(k, theta, thetaPseudoInv, b, maxIter)
-    #print("\nlimapsSolution:")
-    #print(limapsSolution)
-
-    #print("diff:")
-    #print(alpha - limapsSolution)
-
-    #print(not max(abs(alpha - limapsSolution)) > 0.001)
     return not max(abs(alpha - limapsSolution)) > 0.001
 
 def runTest():
