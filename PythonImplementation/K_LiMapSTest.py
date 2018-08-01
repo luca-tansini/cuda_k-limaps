@@ -17,28 +17,33 @@ def MoorePenrosePseudoInverseTest(n,m):
     print(np.allclose(res,APseudoInv))
 
 #Test with b obtained as b = theta * alpha
-def k_LiMapS_noiselessTest(n,k,maxIter):
+def k_LiMapS_noiselessTest(n,m,maxIter):
 
     #Randomly generate dictionary
-    m = n*k
     theta = np.random.rand(n,m)
 
     #Calculate dictionary pseudoinv
     thetaPseudoInv = MoorePenrosePseudoInverse(theta,n,m)
 
-    #Randomly generate optimal solution alpha
-    values = np.random.rand(k)
-    alpha = np.append(values,np.zeros(m-k))
-    np.random.shuffle(alpha)
-    #print("\nalpha:")
-    #print(alpha)
+    res = []
+    for k in range(math.ceil(n/10),n//2+1,math.ceil(n/10)):
+        succ = 0
+        for i in range(100):
 
-    #Calculate b = theta * alpha
-    b = theta @ alpha
+            #Randomly generate optimal solution alpha
+            values = np.random.rand(k)
+            alpha = np.append(values,np.zeros(m-k))
+            np.random.shuffle(alpha)
 
-    #Call k_LiMapS
-    limapsSolution = k_LiMapS(k, theta, thetaPseudoInv, b, maxIter)
-    return not max(abs(alpha - limapsSolution)) > 0.001
+            #Calculate b = theta * alpha
+            b = theta @ alpha
+
+            #Call k_LiMapS
+            limapsSolution = k_LiMapS(k, theta, thetaPseudoInv, b, maxIter)
+            if(max(abs(alpha - limapsSolution)) < 0.0001):
+                succ +=1
+        res += [(k,succ)]
+    return res
 
 def runTest():
     nsizes = [10,25,50,100]
