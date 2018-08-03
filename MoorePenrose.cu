@@ -1,7 +1,13 @@
 #include <float.h>
 #include <cusolverDn.h>
-#include "common.h"
-#include "matrixPrint.h"
+
+#ifndef _COMMON_H
+    #include "common.h"
+#endif
+
+#ifndef _MATRIX_PRINT_H
+    #include "matrixPrint.h"
+#endif
 
 #define BLOCK_SIZE 256
 
@@ -23,7 +29,7 @@ __global__ void calculateDiagPseudoInv(float *S, float *SPseudoInv, int n, int m
 This function calcuates the Moore-Penrose inverse matrix of the input matrix A (n*m, with n > m), leaving the result in APseudoInv, assumed preallocated.
 
 The pseudoinverse is computed via SVD.
-If SVD(A) = U*S*V^T --> A^+ = V * S^+ * U^T, where S^+ is obtained replacing each non-zero element on the diagonal with its reciprocal.
+If SVD(A) = U*S*V^T --> A^+ = V * S^+ * U^T, where S^+ is obtained replacing each non-zero element on the diagonal with its reciprocal and transposing.
 
 The cuSOLVER libraries used to calculate the SVD need the input matrix to be n x m with n >= m.
 */
@@ -87,5 +93,68 @@ void MoorePenroseInverse(float *A, int n, int m, float *APseudoInv){
     CHECK(cudaFree(S));
     CHECK(cudaFree(SPseudoInv));
     CHECK(cudaFree(V_T));
+    CHECK_CUBLAS(cublasDestroy(cublasHandle));
+    CHECK_CUSOLVER(cusolverDnDestroy(cusolverHandle));
 
+}
+
+void TransposedMoorePenroseInverse(float *A, int n, int m, float *APseudoInv){
+
+    float *AT,*APseudoInvT;
+    CHECK(cudaMalloc(&AT, m*n*sizeof(float)));
+    CHECK(cudaMalloc(&APseudoInvT, n*m*sizeof(float)));
+
+    cublasHandle_t cublasHandle;
+    CHECK_CUBLAS(cublasCreate(&cublasHandle));
+    float alpha = 1, beta = 0;
+
+    //Transpose A
+    CHECK_CUBLAS(cublasSgeam(cublasHandle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, &alpha, A, n, &beta, A, n, AT, m));
+
+    //Call MoorePenroseInverse
+    MoorePenroseInverse(AT, m, n, APseudoInvT);
+
+    //Transpose APseudoInvT
+    CHECK_CUBLAS(cublasSgeam(cublasHandle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, &alpha, APseudoInvT, n, &beta, APseudoInvT, n, APseudoInv, m));
+
+    CHECK(cudaFree(AT));
+    CHECK(cudaFree(APseudoInvT));
+    CHECK_CUBLAS(cublasDestroy(cublasHandle));
+
+}
+
+int CheckPseudoInverse(float *A, int n, int m, float *Apinv){
+
+    cublasHandle_t cublasHandle;
+    CHECK_CUBLAS(cublasCreate(&cublasHandle));
+
+    float *id,*d_id,alpha=1,beta=0;
+    CHECK(cudaMalloc(&d_id, m*m*sizeof(float)));
+
+    CHECK_CUBLAS(cublasSgemm(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N, m, m, n, &alpha, Apinv, m, A, n, &beta, d_id, m));
+
+    CHECK(cudaMallocHost(&id, m*m*sizeof(float)));
+    CHECK(cudaMemcpy(id, d_id, m*m*sizeof(float), cudaMemcpyDeviceToHost));
+
+    int i;
+    for(i=0;i<m;i++)
+        for(int j=0; j<m; j++){
+            if(i == j && abs(1-id[j*m+i]) > 1e-4) break;
+            if(i != j && abs(0-id[j*m+i]) > 1e-4) break;
+        }
+
+    int ret;
+    if(i < m){
+        printf("Apinv * A:\n");
+        printColumnMajorMatrix(id, m, m);
+        ret = 0;
+    }
+    else{
+        ret = 1;
+    }
+
+    CHECK(cudaFree(d_id));
+    CHECK(cudaFreeHost(id));
+    CHECK_CUBLAS(cublasDestroy(cublasHandle));
+    return ret;
 }

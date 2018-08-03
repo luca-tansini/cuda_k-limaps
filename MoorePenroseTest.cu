@@ -34,37 +34,12 @@ int main(int argc, char **argv){
     MoorePenroseInverse(d_theta, n, m, d_thetaPseudoInv);
 
     //Check result
-    float *thetaPseudoInv;
-    CHECK(cudaMallocHost(&thetaPseudoInv, m*n*sizeof(float)));
-    CHECK(cudaMemcpy(thetaPseudoInv, d_thetaPseudoInv, m*n*sizeof(float), cudaMemcpyDeviceToHost));
-    cublasHandle_t cublasHandle;
-    CHECK_CUBLAS(cublasCreate(&cublasHandle));
-
-    float *id,*d_id,alpha=1,beta=0;
-    CHECK(cudaMalloc(&d_id, m*m*sizeof(float)));
-
-    CHECK_CUBLAS(cublasSgemm(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N, m, m, n, &alpha, d_thetaPseudoInv, m, d_theta, n, &beta, d_id, m));
-
-    CHECK(cudaMallocHost(&id, m*m*sizeof(float)));
-    CHECK(cudaMemcpy(id, d_id, m*m*sizeof(float), cudaMemcpyDeviceToHost));
-
-    for(i=0;i<m;i++)
-        for(int j=0; j<m; j++){
-            if(i == j && abs(1-id[j*m+i]) > 1e-4) break;
-            if(i != j && abs(0-id[j*m+i]) > 1e-4) break;
-        }
-
-    if(i < m){
-        printf("NOPE!\n");
-        printf("\ntheta:\n");
-        printColumnMajorMatrixForPython(theta, n, m);
-        printf("\nthetaPseudoInv:\n");
-        printColumnMajorMatrix(thetaPseudoInv, m, n);
-        printf("\nthetaPseudoInv * theta:\n");
-        printColumnMajorMatrix(id, m, m);
+    if(CheckPseudoInverse(d_theta, n, m, d_thetaPseudoInv)){
+        printf("OK\n");
     }
-    else
-        printf("OK!\n");
+    else{
+        printf("NOPE\n");
+    }
 
     return 0;
 }
