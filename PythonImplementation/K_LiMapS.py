@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 #Calculates MoorePenrose pseudo-inverse of matrix A via SVD
 #Being SVD(A) = U * S * V^T, A^+ = V * S^+ * U^T
@@ -44,8 +45,7 @@ def k_LiMapS(k, theta, thetaPseudoInv, b, maxIter):
 
         #loop conditions update
         i+=1;
-        if(np.linalg.norm(alpha-oldalpha) < 1e-6):
-            #print(i)
+        if(np.linalg.norm(alpha-oldalpha) <= 1e-5):
             break
 
     #final thresholding step: alpha[i] = 0 if |alpha[i]| <= sigma[k]

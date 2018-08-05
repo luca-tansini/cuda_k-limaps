@@ -4,26 +4,45 @@ import sys
 import time
 from K_LiMapS import *
 
-#Test with b obtained as b = theta * alpha
-def simpleTest(n,m,k,iters):
+def simpleTest(inputfile):
 
-    t1 = time.time()
-    #Randomly generate dictionary
-    theta = np.random.rand(n,m)
+    f = open(inputfile)
+    n = int(f.readline())
+    m = int(f.readline())
+    k = int(f.readline())
+    iters = int(f.readline())
 
-    #Calculate dictionary pseudoinv
-    thetaPseudoInv = MoorePenrosePseudoInverse(theta,n,m)
-    print("Dictionary generation and pseudoinverse computation time elapsed: {0:.6f}".format(time.time() - t1))
+    #Read dictionary theta (read by columns [m x n], so we transpose)
+    theta = []
+    for i in range(m):
+        tmp = []
+        for j in range(n):
+            tmp += [float(f.readline())]
+        theta += [tmp]
+    theta = np.array(theta)
+    theta = theta.transpose()
 
-    succ = 0
+    #Read dictionary pseudoinverse (read by columns [n x m], so we transpose)
+    thetaPseudoInv = []
+    for i in range(n):
+        tmp = []
+        for j in range(m):
+            tmp += [float(f.readline())]
+        thetaPseudoInv += [tmp]
+    thetaPseudoInv = np.array(thetaPseudoInv)
+    thetaPseudoInv = thetaPseudoInv.transpose()
+
+    avgMSE = 0
     avgt = 0
+    succ = 0
 
-    for i in range(iters):
+    for iter in range(iters):
 
-        #Randomly generate optimal solution alpha
-        values = np.random.rand(k)
-        alpha = np.append(values,np.zeros(m-k))
-        np.random.shuffle(alpha)
+        #Read optimal solution alpha
+        alpha = []
+        for i in range(m):
+            alpha += [float(f.readline())]
+        alpha = np.array(alpha)
 
         #Calculate b = theta * alpha
         b = theta @ alpha
@@ -35,14 +54,16 @@ def simpleTest(n,m,k,iters):
 
         #Check result
         if( max(abs(alpha - limapsSolution)) < 0.0001): succ += 1
+        diff = b - theta @ limapsSolution
+        MSE = sum(diff**2)/n
+        avgMSE += MSE
 
-    print("\n{0:.2f}%".format(100*succ/iters))
+    avgMSE /= iters
+    print("\nSucces percentage: {0:.2f}%".format(100*succ/iters))
+    print("\nAverage MSE: {0:.15f}".format(avgMSE))
     print("\nAverage k-LiMapS execution time: {0:.6f}".format(avgt/iters))
     return
 
 if __name__ == '__main__':
-    n = int(sys.argv[1])
-    m = int(sys.argv[2])
-    k = int(sys.argv[3])
-    iters = int(sys.argv[4])
-    simpleTest(n,m,k,iters)
+    inputfile = sys.argv[1]
+    simpleTest(inputfile)

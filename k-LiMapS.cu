@@ -250,8 +250,9 @@ void devMemK_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, fl
         for(int j=0; j<mBlocks; j++)
             norm += partialNormBlocks[j];
         norm = sqrt(norm);
-        if(norm < 1e-6)
+        if(norm <= 1e-5){
             break;
+        }
         i++;
     }
 

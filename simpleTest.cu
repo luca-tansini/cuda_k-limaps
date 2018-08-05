@@ -77,7 +77,7 @@ int main(int argc, char **argv){
         CHECK(cudaMemcpy(b, d_b, n*sizeof(float), cudaMemcpyDeviceToHost));
 
         //call k_LiMapS
-        k_LiMapS(k, theta, n, m, thetaPseudoInv, d_b, limapsAlpha, 1000);
+        k_LiMapS(k, theta, n, m, thetaPseudoInv, b, limapsAlpha, 1000);
 
         //Check result
         for(i=0; i<m; i++)
