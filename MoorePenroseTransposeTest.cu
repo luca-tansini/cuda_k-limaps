@@ -43,7 +43,20 @@ int main(int argc, char **argv){
         printf("OK\n");
     }
     else{
-        printf("NOPE\n");
+
+        printf("D:\n");
+        printColumnMajorMatrixForPython(theta, n, m);
+        printf("\n");
+
+        TransposeDebugMoorePenroseInverse(d_theta, n, m, d_thetaPseudoInv);
+
+        /*float *h_thetaPseudoInv;
+        CHECK(cudaMallocHost(&h_thetaPseudoInv, m*n*sizeof(float)));
+        CHECK(cudaMemcpy(h_thetaPseudoInv, d_thetaPseudoInv, m*n*sizeof(float), cudaMemcpyDeviceToHost));
+
+        printf("DINV:\n");
+        printColumnMajorMatrixForPython(h_thetaPseudoInv, m, n);
+*/
     }
 
     return 0;

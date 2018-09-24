@@ -44,7 +44,6 @@ int main(int argc, char **argv){
             return -2;
         }
 
-
         //transfer d_thetaPseudoInv into host memory
         float *thetaPseudoInv;
         CHECK(cudaMallocHost(&thetaPseudoInv, m*n*sizeof(float)));

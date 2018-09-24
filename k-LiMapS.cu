@@ -116,7 +116,7 @@ void k_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, float *b
         CHECK_CUBLAS(cublasGetVector(m, sizeof(float), d_alpha, 1, sigma, 1));
         //1b. sort absolute values of sigma in descending order
         for(int j=0; j<m; j++)
-            sigma[j] = abs(sigma[j]);
+            sigma[j] = fabs(sigma[j]);
         qsort(sigma, m, sizeof(float), comp);
 
         //2. calculate lambda = 1/sigma[k]
@@ -210,7 +210,7 @@ void devMemK_LiMapS(int k, float *theta, int n, int m, float *thetaPseudoInv, fl
         CHECK_CUBLAS(cublasGetVector(m, sizeof(float), alpha, 1, sigma, 1));
         //1b. sort absolute values of sigma in descending order
         for(int j=0; j<m; j++)
-            sigma[j] = abs(sigma[j]);
+            sigma[j] = fabs(sigma[j]);
         qsort(sigma, m, sizeof(float), comp);
 
         //2. calculate lambda = 1/sigma[k]
