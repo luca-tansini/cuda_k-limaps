@@ -23,17 +23,17 @@ int main(int argc, char **argv){
 
     //Generate dictionary theta
     srand(time(NULL));
-    float *theta;
-    CHECK(cudaMallocHost(&theta, n*m*sizeof(float)));
+    double *theta;
+    CHECK(cudaMallocHost(&theta, n*m*sizeof(double)));
     for(i=0; i<n*m; i++)
-        theta[i] = rand()/(float)RAND_MAX;
+        theta[i] = rand()/(double)RAND_MAX;
 
     //Allocate space for theta and thetaPseudoInv
-    float *d_theta, *d_thetaPseudoInv;
+    double *d_theta, *d_thetaPseudoInv;
 
-    CHECK(cudaMalloc(&d_theta, n*m*sizeof(float)));
-    CHECK(cudaMalloc(&d_thetaPseudoInv, m*n*sizeof(float)));
-    CHECK(cudaMemcpy(d_theta, theta, n*m*sizeof(float), cudaMemcpyHostToDevice));
+    CHECK(cudaMalloc(&d_theta, n*m*sizeof(double)));
+    CHECK(cudaMalloc(&d_thetaPseudoInv, m*n*sizeof(double)));
+    CHECK(cudaMemcpy(d_theta, theta, n*m*sizeof(double), cudaMemcpyHostToDevice));
 
     //call TransposedMoorePenroseInverse
     TransposedMoorePenroseInverse(d_theta, n, m, d_thetaPseudoInv);
@@ -50,9 +50,9 @@ int main(int argc, char **argv){
 
         TransposeDebugMoorePenroseInverse(d_theta, n, m, d_thetaPseudoInv);
 
-        /*float *h_thetaPseudoInv;
-        CHECK(cudaMallocHost(&h_thetaPseudoInv, m*n*sizeof(float)));
-        CHECK(cudaMemcpy(h_thetaPseudoInv, d_thetaPseudoInv, m*n*sizeof(float), cudaMemcpyDeviceToHost));
+        /*double *h_thetaPseudoInv;
+        CHECK(cudaMallocHost(&h_thetaPseudoInv, m*n*sizeof(double)));
+        CHECK(cudaMemcpy(h_thetaPseudoInv, d_thetaPseudoInv, m*n*sizeof(double), cudaMemcpyDeviceToHost));
 
         printf("DINV:\n");
         printColumnMajorMatrixForPython(h_thetaPseudoInv, m, n);

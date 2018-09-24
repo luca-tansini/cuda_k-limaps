@@ -5,7 +5,7 @@
 #define ANSI_COLOR_RED   "\x1b[31m"
 #define ANSI_COLOR_RESET "\x1b[0m"
 
-void printColumnMajorMatrix(float *A, int nrows, int ncols){
+void printColumnMajorMatrix(double *A, int nrows, int ncols){
     int i,j;
     for(i=0; i<nrows; i++){
         for(j=0; j<ncols; j+=1)
@@ -14,7 +14,7 @@ void printColumnMajorMatrix(float *A, int nrows, int ncols){
     }
 }
 
-void printColumnMajorMatrixForPython(float *A, int nrows, int ncols){
+void printColumnMajorMatrixForPython(double *A, int nrows, int ncols){
     int i,j;
     printf("[");
     for(i=0; i<nrows; i++){
@@ -32,7 +32,7 @@ void printColumnMajorMatrixForPython(float *A, int nrows, int ncols){
     printf("]\n\n");
 }
 
-void printHighlightedVector(float *v, int len){
+void printHighlightedVector(double *v, int len){
     int i;
     for(i=0; i<len; i++)
         if(v[i] != 0)
