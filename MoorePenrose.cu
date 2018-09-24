@@ -1,4 +1,4 @@
-#include <double.h>
+#include <float.h>
 #include <cusolverDn.h>
 
 #ifndef _COMMON_H
@@ -276,7 +276,7 @@ int CheckPseudoInverse(double *A, int n, int m, double *Apinv){
 
     int i;
     for(i=0; i<n*m; i++)
-        if(fabs(h_A[i] - h_tmp2[i]) > 1e-3){
+        if(fabs(h_A[i] - h_tmp2[i]) > 1e-4){
             printf("at index %d diff is: %f\n",i, h_A[i] - h_tmp2[i]);
             break;
         }

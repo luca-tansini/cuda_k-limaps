@@ -43,14 +43,15 @@ int main(int argc, char **argv){
         printf("OK\n");
     }
     else{
-
+        printf("NOPE!\n");
+/*
         printf("D:\n");
         printColumnMajorMatrixForPython(theta, n, m);
         printf("\n");
 
         TransposeDebugMoorePenroseInverse(d_theta, n, m, d_thetaPseudoInv);
 
-        /*double *h_thetaPseudoInv;
+        double *h_thetaPseudoInv;
         CHECK(cudaMallocHost(&h_thetaPseudoInv, m*n*sizeof(double)));
         CHECK(cudaMemcpy(h_thetaPseudoInv, d_thetaPseudoInv, m*n*sizeof(double), cudaMemcpyDeviceToHost));
 
