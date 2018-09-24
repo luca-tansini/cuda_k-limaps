@@ -161,10 +161,8 @@ int main(int argc, char **argv){
         avgMSE += MSE/n;
     }
 
-    printf("\nsuccess percentage: %.2f\n",succ*100.0/numIter);
     avgMSE/=numIter;
-    printf("\naverage MSE: %.15f\n",avgMSE);
-    printf("\naverage k-LiMapS execution time: %.6f\n", avgt/numIter);
+    printf("CUDA;%d;%d;%d;%d;%.2f;%.15f;%.6f\n",n,m,k,numIter,succ*100.0/numIter,avgMSE,avgt/numIter);
 
     //Free memory
     CHECK(cudaFreeHost(theta));

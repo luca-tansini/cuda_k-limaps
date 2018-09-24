@@ -59,9 +59,7 @@ def simpleTest(inputfile):
         avgMSE += MSE
 
     avgMSE /= iters
-    print("\nSucces percentage: {0:.2f}%".format(100*succ/iters))
-    print("\nAverage MSE: {0:.15f}".format(avgMSE))
-    print("\nAverage k-LiMapS execution time: {0:.6f}".format(avgt/iters))
+    print('Python',n,m,k,iters,100*succ/iters,avgMSE,avgt/iters,sep=';')
     return
 
 if __name__ == '__main__':
