@@ -2,14 +2,14 @@
 #include "MoorePenrose.cu"
 
 //Function generating the dictionary
-void createDict(float *D, int n, int m){
+void createDict(double *D, int n, int m){
 
     int i;
 
     srand(time(NULL));
 
     for(i=0;i<n*m;i++)
-        D[i] = rand()/(float)RAND_MAX;
+        D[i] = rand()/(double)RAND_MAX;
 
 }
 
@@ -25,100 +25,100 @@ int main(int argc, char **argv){
     int k = n/4;
 
     //DEBUG
-    printf("n: %d\nm:%d\nk:%d\n",n,m,k);
+    printf("n:%d\tm:%d\tk:%d\n",n,m,k);
     //END DEBUG
 
     //CREA DIZIONARIO D
-    float *h_D,*d_D;
-    CHECK(cudaMallocHost(&h_D, n*m*sizeof(float)));
+    double *h_D,*d_D;
+    CHECK(cudaMallocHost(&h_D, n*m*sizeof(double)));
 
     createDict(h_D, n, m);
 
-    CHECK(cudaMalloc(&d_D, n*m*sizeof(float)));
-    CHECK(cudaMemcpy(d_D, h_D, n*m*sizeof(float), cudaMemcpyHostToDevice));
+    CHECK(cudaMalloc(&d_D, n*m*sizeof(double)));
+    CHECK(cudaMemcpy(d_D, h_D, n*m*sizeof(double), cudaMemcpyHostToDevice));
 
-    //DEBUG
+    /*//DEBUG
     printf("D:\n");
     printColumnMajorMatrixForPython(h_D, n, m);
     printf("\n");
-    //END DEBUG
+    //END DEBUG*/
 
     //CALCOLA PSEUDOINVERSA DINV
-    float *h_DINV,*d_DINV;
-    CHECK(cudaMalloc(&d_DINV, m*n*sizeof(float)));
+    double *h_DINV,*d_DINV;
+    CHECK(cudaMalloc(&d_DINV, m*n*sizeof(double)));
 
     TransposedMoorePenroseInverse(d_D, n, m, d_DINV);
 
     if(!CheckPseudoInverse(d_D, n, m, d_DINV)){
         printf("Something went wrong with the Moore-Penrose pseudoinverse!\n");
-        return 3;
+        //return 3;
     }
 
-    CHECK(cudaMallocHost(&h_DINV, m*n*sizeof(float)));
-    CHECK(cudaMemcpy(h_DINV, d_DINV, m*n*sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(cudaMallocHost(&h_DINV, m*n*sizeof(double)));
+    CHECK(cudaMemcpy(h_DINV, d_DINV, m*n*sizeof(double), cudaMemcpyDeviceToHost));
 
-    //DEBUG
+    /*//DEBUG
     printf("DINV:\n");
     printColumnMajorMatrixForPython(h_DINV, m, n);
     printf("\n");
-    //END DEBUG
+    //END DEBUG*/
 
     //GENERA ALPHAOPT
-    float *h_alphaopt,*d_alphaopt;
-    CHECK(cudaMallocHost(&h_alphaopt, m*sizeof(float)));
+    double *h_alphaopt,*d_alphaopt;
+    CHECK(cudaMallocHost(&h_alphaopt, m*sizeof(double)));
 
     int i,j;
-    memset(h_alphaopt, 0, m*sizeof(float));
+    memset(h_alphaopt, 0, m*sizeof(double));
     for(i=0; i<k; i++){
         j = rand()%m;
         if(h_alphaopt[j] != 0)
             i--;
         else
-            h_alphaopt[j] = rand()/(float)RAND_MAX;
+            h_alphaopt[j] = rand()/(double)RAND_MAX;
     }
 
-    CHECK(cudaMalloc(&d_alphaopt, m*sizeof(float)));
-    CHECK(cudaMemcpy(d_alphaopt, h_alphaopt, m*sizeof(float), cudaMemcpyHostToDevice));
+    CHECK(cudaMalloc(&d_alphaopt, m*sizeof(double)));
+    CHECK(cudaMemcpy(d_alphaopt, h_alphaopt, m*sizeof(double), cudaMemcpyHostToDevice));
 
-    //DEBUG
+    /*//DEBUG
     printf("alphaopt:\n");
     printColumnMajorMatrixForPython(h_alphaopt, m, 1);
     printf("\n");
-    //END DEBUG
+    //END DEBUG*/
 
     //GENERA S = D * alphaopt
-    float *h_s,*d_s;
-    CHECK(cudaMalloc(&d_s, n*sizeof(float)));
+    double *h_s,*d_s;
+    CHECK(cudaMalloc(&d_s, n*sizeof(double)));
 
     cublasHandle_t cublasHandle;
     CHECK_CUBLAS(cublasCreate(&cublasHandle));
-    float cualpha=1,cubeta=0;
+    double cualpha=1,cubeta=0;
 
-    CHECK_CUBLAS(cublasSgemv(cublasHandle, CUBLAS_OP_N, n, m, &cualpha, d_D, n, d_alphaopt, 1, &cubeta, d_s, 1));
+    CHECK_CUBLAS(cublasDgemv(cublasHandle, CUBLAS_OP_N, n, m, &cualpha, d_D, n, d_alphaopt, 1, &cubeta, d_s, 1));
 
-    CHECK(cudaMallocHost(&h_s, n*sizeof(float)));
-    CHECK(cudaMemcpy(h_s, d_s, n*sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(cudaMallocHost(&h_s, n*sizeof(double)));
+    CHECK(cudaMemcpy(h_s, d_s, n*sizeof(double), cudaMemcpyDeviceToHost));
 
-    //DEBUG
+    /*//DEBUG
     printf("s:\n");
     printColumnMajorMatrixForPython(h_s, n, 1);
     printf("\n");
-    //END DEBUG
+    //END DEBUG*/
 
     //CHIAMA K_LiMapS
-    float *h_alphalimaps,*d_alphalimaps;
-    CHECK(cudaMalloc(&d_alphalimaps, m*sizeof(float)));
+    double *h_alphalimaps,*d_alphalimaps;
+    CHECK(cudaMalloc(&d_alphalimaps, m*sizeof(double)));
 
     devMemK_LiMapS(k, d_D, n, m, d_DINV, d_s, d_alphalimaps, 1000);
 
-    CHECK(cudaMallocHost(&h_alphalimaps, m*sizeof(float)));
-    CHECK(cudaMemcpy(h_alphalimaps, d_alphalimaps, m*sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(cudaMallocHost(&h_alphalimaps, m*sizeof(double)));
+    CHECK(cudaMemcpy(h_alphalimaps, d_alphalimaps, m*sizeof(double), cudaMemcpyDeviceToHost));
 
-    //DEBUG
+    /*//DEBUG
     printf("alphalimaps:\n");
     printColumnMajorMatrixForPython(h_alphalimaps, m, 1);
     printf("\n");
-    //END DEBUG
+    //END DEBUG*/
 
     //CHECK DEL RISULTATO
     for(i=0; i<m; i++)

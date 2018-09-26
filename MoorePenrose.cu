@@ -276,7 +276,7 @@ int CheckPseudoInverse(double *A, int n, int m, double *Apinv){
 
     int i;
     for(i=0; i<n*m; i++)
-        if(fabs(h_A[i] - h_tmp2[i]) > 1e-4){
+        if(fabs(h_A[i] - h_tmp2[i]) > 1e-2){
             printf("at index %d diff is: %f\n",i, h_A[i] - h_tmp2[i]);
             break;
         }

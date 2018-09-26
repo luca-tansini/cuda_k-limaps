@@ -14,7 +14,7 @@ double seconds(){
 }
 
 //Kernel implementing the square sum of a vector (vector is destroyed after computation, with v[i] being the partial sum of block i). The exceeding portion of the vector must be set to 0.
-__global__ void squareVectorReduceSum(float *v){
+__global__ void squareVectorReduceSum(double *v){
 
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -22,7 +22,7 @@ __global__ void squareVectorReduceSum(float *v){
 
     int step = blockDim.x / 2;
     int idx = threadIdx.x;
-    float *p = v + blockDim.x * blockIdx.x;
+    double *p = v + blockDim.x * blockIdx.x;
     while(step > 0){
         if(idx < step)
             p[idx] = p[idx] + p[idx+step];
@@ -44,48 +44,48 @@ int main(int argc, char **argv){
     scanf("%d", &k);
     scanf("%d", &numIter);
 
-    float *theta, *thetaPseudoInv, *alpha, *limapsAlpha, *d_limapsAlpha;
-    CHECK(cudaMallocHost(&theta, n*m*sizeof(float)));
-    CHECK(cudaMallocHost(&thetaPseudoInv, n*m*sizeof(float)));
-    CHECK(cudaMallocHost(&alpha, m*sizeof(float)));
-    CHECK(cudaMallocHost(&limapsAlpha, m*sizeof(float)));
-    CHECK(cudaMalloc(&d_limapsAlpha, m*sizeof(float)));
+    double *theta, *thetaPseudoInv, *alpha, *limapsAlpha, *d_limapsAlpha;
+    CHECK(cudaMallocHost(&theta, n*m*sizeof(double)));
+    CHECK(cudaMallocHost(&thetaPseudoInv, n*m*sizeof(double)));
+    CHECK(cudaMallocHost(&alpha, m*sizeof(double)));
+    CHECK(cudaMallocHost(&limapsAlpha, m*sizeof(double)));
+    CHECK(cudaMalloc(&d_limapsAlpha, m*sizeof(double)));
 
     //Read theta with random values between 0 and 1
     for(i=0; i<n*m; i++)
-        scanf("%f", &theta[i]);
-    float *d_theta;
-    CHECK(cudaMalloc(&d_theta, n*m*sizeof(float)));
-    CHECK(cudaMemcpy(d_theta, theta, n*m*sizeof(float), cudaMemcpyHostToDevice));
+        scanf("%lf", &theta[i]);
+    double *d_theta;
+    CHECK(cudaMalloc(&d_theta, n*m*sizeof(double)));
+    CHECK(cudaMemcpy(d_theta, theta, n*m*sizeof(double), cudaMemcpyHostToDevice));
 
     //Read theta Moore-Penrose inverse
     for(i=0; i<m*n; i++)
-        scanf("%f", &thetaPseudoInv[i]);
-    float *d_thetaPseudoInv;
-    CHECK(cudaMalloc(&d_thetaPseudoInv, m*n*sizeof(float)));
-    CHECK(cudaMemcpy(d_thetaPseudoInv, thetaPseudoInv, m*n*sizeof(float), cudaMemcpyHostToDevice));
+        scanf("%lf", &thetaPseudoInv[i]);
+    double *d_thetaPseudoInv;
+    CHECK(cudaMalloc(&d_thetaPseudoInv, m*n*sizeof(double)));
+    CHECK(cudaMemcpy(d_thetaPseudoInv, thetaPseudoInv, m*n*sizeof(double), cudaMemcpyHostToDevice));
 
     //Initialize cublas
-    float cualpha=1,cubeta=0;
+    double cualpha=1,cubeta=0;
     cublasHandle_t cublasHandle;
     CHECK_CUBLAS(cublasCreate(&cublasHandle));
 
     //Allocate device pointers
-    float *d_b, *d_alpha;
-    CHECK(cudaMalloc(&d_b, n*sizeof(float)));
-    CHECK(cudaMalloc(&d_alpha, m*sizeof(float)));
+    double *d_b, *d_alpha;
+    CHECK(cudaMalloc(&d_b, n*sizeof(double)));
+    CHECK(cudaMalloc(&d_alpha, m*sizeof(double)));
 
     //Allocate MSE temp pointer
     int blocks = ceil(n*1.0/BLOCK_SIZE);
     dim3 dimGrid(blocks,1,1);
     dim3 dimBlock(BLOCK_SIZE,1,1);
-    float *d_limapsB;
-    CHECK(cudaMalloc(&d_limapsB, blocks*BLOCK_SIZE*sizeof(float)));
-    CHECK(cudaMemset(d_limapsB, 0, blocks*BLOCK_SIZE*sizeof(float)));
+    double *d_limapsB;
+    CHECK(cudaMalloc(&d_limapsB, blocks*BLOCK_SIZE*sizeof(double)));
+    CHECK(cudaMemset(d_limapsB, 0, blocks*BLOCK_SIZE*sizeof(double)));
 
-    float avgMSE=0;
-    float *partialMSEBlocks;
-    CHECK(cudaMallocHost(&partialMSEBlocks, blocks*sizeof(float)));
+    double avgMSE=0;
+    double *partialMSEBlocks;
+    CHECK(cudaMallocHost(&partialMSEBlocks, blocks*sizeof(double)));
     int succ = 0;
     double t1,avgt=0;
 
@@ -93,16 +93,16 @@ int main(int argc, char **argv){
 
         //Read alpha
         for(i=0; i<m; i++)
-            scanf("%f", &alpha[i]);
-        CHECK(cudaMemcpy(d_alpha, alpha, m*sizeof(float), cudaMemcpyHostToDevice));
+            scanf("%lf", &alpha[i]);
+        CHECK(cudaMemcpy(d_alpha, alpha, m*sizeof(double), cudaMemcpyHostToDevice));
 
         //Calculate b = theta * alpha
-        CHECK_CUBLAS(cublasSgemv(cublasHandle, CUBLAS_OP_N, n, m, &cualpha, d_theta, n, d_alpha, 1, &cubeta, d_b, 1));
+        CHECK_CUBLAS(cublasDgemv(cublasHandle, CUBLAS_OP_N, n, m, &cualpha, d_theta, n, d_alpha, 1, &cubeta, d_b, 1));
 
         /*//DEBUG
-        float *b;
-        CHECK(cudaMallocHost(&b, n*sizeof(float)));
-        CHECK(cudaMemcpy(b, d_b, n*sizeof(float), cudaMemcpyDeviceToHost));
+        double *b;
+        CHECK(cudaMallocHost(&b, n*sizeof(double)));
+        CHECK(cudaMemcpy(b, d_b, n*sizeof(double), cudaMemcpyDeviceToHost));
         printf("\nb:\n");
         printHighlightedVector(b,n);
         //END DEBUG*/
@@ -113,9 +113,9 @@ int main(int argc, char **argv){
         avgt += seconds() - t1;
 
         /*//DEBUG
-        float *limapsAlpha;
-        CHECK(cudaMallocHost(&limapsAlpha, m * sizeof(float)));
-        CHECK(cudaMemcpy(limapsAlpha, d_limapsAlpha, m*sizeof(float), cudaMemcpyDeviceToHost));
+        double *limapsAlpha;
+        CHECK(cudaMallocHost(&limapsAlpha, m * sizeof(double)));
+        CHECK(cudaMemcpy(limapsAlpha, d_limapsAlpha, m*sizeof(double), cudaMemcpyDeviceToHost));
         printf("\nalpha:\n");
         printHighlightedVector(alpha,m);
         printf("\nlimapsAlpha:\n");
@@ -123,7 +123,7 @@ int main(int argc, char **argv){
         //END DEBUG*/
 
         //Check result
-        CHECK(cudaMemcpy(limapsAlpha, d_limapsAlpha, m*sizeof(float), cudaMemcpyHostToDevice));
+        CHECK(cudaMemcpy(limapsAlpha, d_limapsAlpha, m*sizeof(double), cudaMemcpyHostToDevice));
         for(i=0; i<m; i++)
             if(abs(alpha[i] - limapsAlpha[i]) > 1e-4)
                 break;
@@ -132,12 +132,12 @@ int main(int argc, char **argv){
 
 
         //Calculate MSE: sum((b - theta * limapsAlpha)^2)/n
-        CHECK_CUBLAS(cublasSgemv(cublasHandle, CUBLAS_OP_N, n, m, &cualpha, d_theta, n, d_limapsAlpha, 1, &cubeta, d_limapsB, 1));
+        CHECK_CUBLAS(cublasDgemv(cublasHandle, CUBLAS_OP_N, n, m, &cualpha, d_theta, n, d_limapsAlpha, 1, &cubeta, d_limapsB, 1));
 
         /*//DEBUG
-        float *tmp;
-        CHECK(cudaMallocHost(&tmp, blocks*BLOCK_SIZE*sizeof(float)));
-        CHECK(cudaMemcpy(tmp, d_limapsB, blocks*BLOCK_SIZE*sizeof(float), cudaMemcpyDeviceToHost));
+        double *tmp;
+        CHECK(cudaMallocHost(&tmp, blocks*BLOCK_SIZE*sizeof(double)));
+        CHECK(cudaMemcpy(tmp, d_limapsB, blocks*BLOCK_SIZE*sizeof(double), cudaMemcpyDeviceToHost));
         printf("\ntheta * limapsAlpha:\n");
         printHighlightedVector(tmp, blocks*BLOCK_SIZE);
         //END DEBUG*/
@@ -146,7 +146,7 @@ int main(int argc, char **argv){
         CHECK(cudaDeviceSynchronize());
 
         /*//DEBUG
-        CHECK(cudaMemcpy(tmp, d_limapsB, blocks*BLOCK_SIZE*sizeof(float), cudaMemcpyDeviceToHost));
+        CHECK(cudaMemcpy(tmp, d_limapsB, blocks*BLOCK_SIZE*sizeof(double), cudaMemcpyDeviceToHost));
         printf("\nb - theta * limapsAlpha:\n");
         printHighlightedVector(tmp, blocks*BLOCK_SIZE);
         //END DEBUG*/
@@ -154,8 +154,8 @@ int main(int argc, char **argv){
         squareVectorReduceSum<<<dimGrid,dimBlock>>>(d_limapsB);
         CHECK(cudaDeviceSynchronize());
 
-        CHECK(cudaMemcpy(partialMSEBlocks, d_limapsB, blocks * sizeof(float), cudaMemcpyDeviceToHost));
-        float MSE = 0;
+        CHECK(cudaMemcpy(partialMSEBlocks, d_limapsB, blocks * sizeof(double), cudaMemcpyDeviceToHost));
+        double MSE = 0;
         for(j=0; j<blocks; j++)
             MSE += partialMSEBlocks[j];
         avgMSE += MSE/n;

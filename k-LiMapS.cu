@@ -189,7 +189,7 @@ void devMemK_LiMapS(int k, double *theta, int n, int m, double *thetaPseudoInv, 
 
     //calculate initial alpha = thetaPseudoInv * b
     double cuAlpha = 1, cuBeta = 0;
-    CHECK_CUBLAS(cublasSgemv(handle, CUBLAS_OP_N, m, n, &cuAlpha, thetaPseudoInv, m, b, 1, &cuBeta, alpha, 1));
+    CHECK_CUBLAS(cublasDgemv(handle, CUBLAS_OP_N, m, n, &cuAlpha, thetaPseudoInv, m, b, 1, &cuBeta, alpha, 1));
 
     //algorithm internal loop
     int i = 0;
