@@ -1,9 +1,6 @@
 #include "MoorePenrose.cu"
 #include <stdio.h>
 
-/*
-This main tests the MoorePenrose pseudoinverse algorithm reading all the data needed for the test from standard input. Since our matrices have n < m, we transpose theta before calling MoorePenrose. This will give us the pseudoinverse in a transposed state and we only have to transpose it again to obtain the correct pseudoinverse.
-*/
 int main(int argc, char **argv){
 
     int n,m,i;
@@ -18,17 +15,17 @@ int main(int argc, char **argv){
 
     //Generate dictionary theta
     srand(time(NULL));
-    float *theta;
-    CHECK(cudaMallocHost(&theta, n*m*sizeof(float)));
+    double *theta;
+    CHECK(cudaMallocHost(&theta, n*m*sizeof(double)));
     for(i=0; i<n*m; i++)
-        theta[i] = rand()/(float)RAND_MAX;
+        theta[i] = rand()/(double)RAND_MAX;
 
     //Allocate space for theta and thetaPseudoInv
-    float *d_theta, *d_thetaPseudoInv;
+    double *d_theta, *d_thetaPseudoInv;
 
-    CHECK(cudaMalloc(&d_theta, n*m*sizeof(float)));
-    CHECK(cudaMalloc(&d_thetaPseudoInv, m*n*sizeof(float)));
-    CHECK(cudaMemcpy(d_theta, theta, n*m*sizeof(float), cudaMemcpyHostToDevice));
+    CHECK(cudaMalloc(&d_theta, n*m*sizeof(double)));
+    CHECK(cudaMalloc(&d_thetaPseudoInv, m*n*sizeof(double)));
+    CHECK(cudaMemcpy(d_theta, theta, n*m*sizeof(double), cudaMemcpyHostToDevice));
 
     //call MoorePenrose
     MoorePenroseInverse(d_theta, n, m, d_thetaPseudoInv);

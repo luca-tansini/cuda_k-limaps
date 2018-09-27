@@ -1,5 +1,6 @@
 #include <float.h>
 #include <cusolverDn.h>
+#include "singular_value_decomposition.h"
 
 #ifndef _COMMON_H
     #include "common.h"
@@ -276,7 +277,7 @@ int CheckPseudoInverse(double *A, int n, int m, double *Apinv){
 
     int i;
     for(i=0; i<n*m; i++)
-        if(fabs(h_A[i] - h_tmp2[i]) > 1e-2){
+        if(fabs(h_A[i] - h_tmp2[i]) > 1e-4){
             printf("at index %d diff is: %f\n",i, h_A[i] - h_tmp2[i]);
             break;
         }
@@ -292,4 +293,46 @@ int CheckPseudoInverse(double *A, int n, int m, double *Apinv){
     CHECK_CUBLAS(cublasDestroy(cublasHandle));
 
     return ret;
+}
+
+//Function that computes MoorePenrose pseudoinverse using host libraries.
+//The library assumes the input matrix are RowMajor n x m with n >= m
+//We use our ColMajor matrices as input which conveniently when read RowMajor with n and m switched are exactly their own transposed, with m >= n.
+//This is possible because the pseudoinverse of the transposed is the transposed of the pseudoinverse.
+//The n and m switch is performed inside the procedure.
+void HostMoorePenroseInverse(double *d_A, int n, int m, double *d_Apinv){
+
+    int nrows = m;
+    int ncols = n;
+    double *A,*Apinv,*U,*VT,*S,*dummy_array;
+
+    CHECK(cudaMallocHost(&A, n*m*sizeof(double)));
+    CHECK(cudaMallocHost(&Apinv, m*n*sizeof(double)));
+    CHECK(cudaMemcpy(A, d_A, n*m*sizeof(double), cudaMemcpyDeviceToHost));
+
+    dummy_array = (double*) malloc(ncols * sizeof(double));
+    if(dummy_array == NULL){ printf(" No memory available\n"); exit(0);}
+
+    U = (double *) malloc(nrows * ncols * sizeof(double));
+    if(U == NULL){ printf(" No memory available\n"); exit(0);}
+
+    S = (double *) malloc(ncols * sizeof(double));
+    if(S == NULL){ printf(" No memory available\n"); exit(0);}
+
+    VT = (double *) malloc(ncols * ncols * sizeof(double));
+    if(VT == NULL){ printf(" No memory available\n"); exit(0);}
+
+    int err = Singular_Value_Decomposition(A, nrows, ncols, U, S, VT, dummy_array);
+
+    if(err < 0)
+        printf(" Failed to converge\n");
+
+    Singular_Value_Decomposition_Inverse(U, S, VT, 0, nrows, ncols, Apinv);
+
+    CHECK(cudaMemcpy(d_Apinv, Apinv, m*n*sizeof(double), cudaMemcpyHostToDevice));
+
+    free(dummy_array);
+    CHECK(cudaFreeHost(A));
+    CHECK(cudaFreeHost(Apinv));
+
 }
