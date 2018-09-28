@@ -6,17 +6,12 @@ int main(int argc, char **argv){
     int n,m,i;
 
     if(argc != 3){
-        printf("usage: MoorePenroseTest n m\n");
+        printf("usage: JacobiMoorePenroseTest n m\n");
         exit(-1);
     }
 
     n = atoi(argv[1]);
     m = atoi(argv[2]);
-
-    if(n < m){
-        printf("error: n must be >= m!\n");
-        return -1;
-    }
 
     srand(time(NULL));
     double *A;
@@ -31,9 +26,9 @@ int main(int argc, char **argv){
 
     CHECK(cudaMemcpy(d_A, A, n*m*sizeof(double), cudaMemcpyHostToDevice));
 
-    //call MoorePenrose
+    //call JacobiMoorePenroseInverse
     double t = seconds();
-    MoorePenroseInverse(d_A, n, m, d_Apinv);
+    JacobiMoorePenroseInverse(d_A, n, m, d_Apinv);
     printf("elapsed time: %fs\n",seconds() - t);
 
     //Check result

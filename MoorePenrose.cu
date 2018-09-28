@@ -13,17 +13,88 @@
 #define BLOCK_SIZE 256
 
 /*
-Kernel that takes the vector of singular values S (of length m) and produces the pseudo inverse of the diagonal matrix of S. According to the instances, we assume n >= m. Since [n x m] would be the dimension of S diag matrix, and we also have to transpose the diag matrix, its pseudo inverse will be [m x n], with leading dimension m.
+Kernel that takes the vector of singular values S (of length m) and produces the pseudo inverse of the diagonal matrix of S. Since [n x m] would be the dimension of S diag matrix, and we also have to transpose the diag matrix, its pseudo inverse will be [m x n], with leading dimension m.
 The elements on the main diagonal are to be inverted only if non-zero. To determine what is zero we use a threshold based on the machine DBL_EPSILON.
 */
 __global__ void calculateDiagPseudoInv(double *S, double *SPseudoInv, int n, int m){
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
-    if(idx < m){
+    if(idx < m && idx < n){
         if(fabsf(S[idx]) > DBL_EPSILON)
             SPseudoInv[idx*m + idx] = 1/S[idx];
         else
-            SPseudoInv[idx*m + idx] = S[idx];
+            SPseudoInv[idx*m + idx] = 0;
     }
+}
+
+/*
+This version uses cusolverDnSgesvdj which uses the Jacobi method for SVD decomposition.
+There is no constraint on n and m.
+cusolverDnSgesvdj return V instead of VH
+*/
+void JacobiMoorePenroseInverse(double *A, int n, int m, double *APseudoInv){
+
+    cusolverDnHandle_t cusolverHandle;
+    cublasHandle_t cublasHandle;
+    CHECK_CUSOLVER(cusolverDnCreate(&cusolverHandle));
+    CHECK_CUBLAS(cublasCreate(&cublasHandle));
+
+    //Allocate U,S,V
+    double *U,*S,*V;
+    CHECK(cudaMalloc(&U, n*n*sizeof(double)));
+    CHECK(cudaMalloc(&S, m*sizeof(double)));
+    CHECK(cudaMalloc(&V, m*m*sizeof(double)));
+
+    //Calculate SVD with cuSOLVER
+    double *Acopy; //we use a copy of A because apparently gesvd destroys input matrix
+    CHECK(cudaMalloc(&Acopy, n*m*sizeof(double)));
+    CHECK(cudaMemcpy(Acopy, A, n*m*sizeof(double), cudaMemcpyDeviceToDevice));
+
+    //Set up cusolverDnDgesvdj parameters
+    int bufferDim;
+    double *buffer;
+    gesvdjInfo_t gesvdj_params = NULL;
+    cusolverDnCreateGesvdjInfo(&gesvdj_params);
+    CHECK_CUSOLVER(cusolverDnDgesvdj_bufferSize(cusolverHandle, CUSOLVER_EIG_MODE_VECTOR, 0, n, m, Acopy, n, S, U, n, V, m, &bufferDim, gesvdj_params));
+    CHECK(cudaMalloc(&buffer,bufferDim*sizeof(double)));
+
+    //Call cusolverDnDgesvdj
+    int *dev_info, h_dev_info;
+    CHECK(cudaMalloc(&dev_info, sizeof(int)));
+    CHECK_CUSOLVER(cusolverDnDgesvdj(cusolverHandle, CUSOLVER_EIG_MODE_VECTOR, 0, n, m, Acopy, n, S, U, n, V, m, buffer, bufferDim, dev_info, gesvdj_params));
+    CHECK(cudaMemcpy(&h_dev_info, dev_info, sizeof(int), cudaMemcpyDeviceToHost));
+    if(h_dev_info != 0)
+        printf("Something went wrong (dev_info=%d)\n", h_dev_info);
+
+    //Calculate S^+
+    double *SPseudoInv;
+    CHECK(cudaMalloc(&SPseudoInv, m*n*sizeof(double)));
+    CHECK(cudaMemset(SPseudoInv, 0, m*n*sizeof(double)));
+
+    dim3 dimBlock(BLOCK_SIZE,1,1);
+    dim3 dimGrid(ceil(m*1.0/BLOCK_SIZE),1,1);
+    calculateDiagPseudoInv<<<dimGrid,dimBlock>>>(S, SPseudoInv, n, m);
+    CHECK(cudaDeviceSynchronize());
+
+    //calculate APseudoInv = V * S^+ * U^T
+    double alpha=1,beta=0,*tmp;
+    CHECK(cudaMalloc(&tmp, m*n*sizeof(double)));
+
+    //tmp = V * S^+
+    CHECK_CUBLAS(cublasDgemm(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, m, &alpha, V, m, SPseudoInv, m, &beta, tmp, m));
+
+    //APseudoInv = tmp * U^T
+    CHECK_CUBLAS(cublasDgemm(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, n, &alpha, tmp, m, U, n, &beta, APseudoInv, m));
+
+    //Free memory
+    CHECK(cudaFree(buffer));
+    CHECK(cudaFree(U));
+    CHECK(cudaFree(S));
+    CHECK(cudaFree(SPseudoInv));
+    CHECK(cudaFree(V));
+    CHECK(cudaFree(tmp));
+    CHECK_CUBLAS(cublasDestroy(cublasHandle));
+    CHECK_CUSOLVER(cusolverDnDestroy(cusolverHandle));
+
 }
 
 /*
@@ -52,21 +123,20 @@ void MoorePenroseInverse(double *A, int n, int m, double *APseudoInv){
     CHECK_CUSOLVER(cusolverDnDgesvd_bufferSize(cusolverHandle, n, m, &bufferDim));
     CHECK(cudaMalloc(&buffer,bufferDim*sizeof(double)));
 
-    //Allocate U,S,V_T
-    double *U,*S,*V_T;
+    //Allocate U,S,VT
+    double *U,*S,*VT;
     CHECK(cudaMalloc(&U, n*n*sizeof(double)));
     CHECK(cudaMalloc(&S, m*sizeof(double)));
-    CHECK(cudaMalloc(&V_T, m*m*sizeof(double)));
+    CHECK(cudaMalloc(&VT, m*m*sizeof(double)));
 
     //Calculate SVD with cuSOLVER
-
     double *Acopy; //we use a copy of A because apparently gesvd destroys input matrix
     CHECK(cudaMalloc(&Acopy, n*m*sizeof(double)));
     CHECK(cudaMemcpy(Acopy, A, n*m*sizeof(double), cudaMemcpyDeviceToDevice));
 
     int *dev_info, h_dev_info;
     CHECK(cudaMalloc(&dev_info, sizeof(int)));
-    CHECK_CUSOLVER(cusolverDnDgesvd(cusolverHandle, 'A', 'A', n, m, Acopy, n, S, U, n, V_T, m, buffer, bufferDim, NULL, dev_info));
+    CHECK_CUSOLVER(cusolverDnDgesvd(cusolverHandle, 'A', 'A', n, m, Acopy, n, S, U, n, VT, m, buffer, bufferDim, NULL, dev_info));
     CHECK(cudaMemcpy(&h_dev_info, dev_info, sizeof(int), cudaMemcpyDeviceToHost));
     if(h_dev_info != 0)
         printf("Something went wrong (dev_info=%d)\n", h_dev_info);
@@ -81,19 +151,23 @@ void MoorePenroseInverse(double *A, int n, int m, double *APseudoInv){
     calculateDiagPseudoInv<<<dimGrid,dimBlock>>>(S, SPseudoInv, n, m);
     CHECK(cudaDeviceSynchronize());
 
-    //calculate APseudoInv = V_T^T * S^+ * U^T
-    //APseudoInv = V_T^T * S^+
-    double alpha=1,beta=0;
-    CHECK_CUBLAS(cublasDgemm(cublasHandle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, m, &alpha, V_T, m, SPseudoInv, m, &beta, APseudoInv, m));
-    //APseudoInv *= U^T
-    CHECK_CUBLAS(cublasDgemm(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, n, &alpha, APseudoInv, m, U, n, &beta, APseudoInv, m));
+    //calculate APseudoInv = VT^T * S^+ * U^T
+    double alpha=1,beta=0,*tmp;
+    CHECK(cudaMalloc(&tmp, m*n*sizeof(double)));
+
+    //tmp = VT^T * S^+
+    CHECK_CUBLAS(cublasDgemm(cublasHandle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, m, &alpha, VT, m, SPseudoInv, m, &beta, tmp, m));
+
+    //APseudoInv = tmp * U^T
+    CHECK_CUBLAS(cublasDgemm(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, n, &alpha, tmp, m, U, n, &beta, APseudoInv, m));
 
     //Free memory
     CHECK(cudaFree(buffer));
     CHECK(cudaFree(U));
     CHECK(cudaFree(S));
     CHECK(cudaFree(SPseudoInv));
-    CHECK(cudaFree(V_T));
+    CHECK(cudaFree(VT));
+    CHECK(cudaFree(tmp));
     CHECK_CUBLAS(cublasDestroy(cublasHandle));
     CHECK_CUSOLVER(cusolverDnDestroy(cusolverHandle));
 
@@ -114,132 +188,6 @@ void TransposedMoorePenroseInverse(double *A, int n, int m, double *APseudoInv){
 
     //Call MoorePenroseInverse
     MoorePenroseInverse(AT, m, n, APseudoInvT);
-
-    //Transpose APseudoInvT
-    CHECK_CUBLAS(cublasDgeam(cublasHandle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, &alpha, APseudoInvT, n, &beta, APseudoInvT, n, APseudoInv, m));
-
-    CHECK(cudaFree(AT));
-    CHECK(cudaFree(APseudoInvT));
-    CHECK_CUBLAS(cublasDestroy(cublasHandle));
-
-}
-
-void DebugMoorePenroseInverse(double *A, int n, int m, double *APseudoInv){
-
-    if(n < m){
-        printf("error: n must be >= m! (you can transpose the input matrix and then transpose the result to work with matrices that have less rows than columns)\n");
-        return;
-    }
-
-    cusolverDnHandle_t cusolverHandle;
-    cublasHandle_t cublasHandle;
-    CHECK_CUSOLVER(cusolverDnCreate(&cusolverHandle));
-    CHECK_CUBLAS(cublasCreate(&cublasHandle));
-
-    //Get dimension needed for the workspace buffer and allocate it
-    int bufferDim;
-    double *buffer;
-    CHECK_CUSOLVER(cusolverDnDgesvd_bufferSize(cusolverHandle, n, m, &bufferDim));
-    CHECK(cudaMalloc(&buffer,bufferDim*sizeof(double)));
-
-    //Allocate U,S,V_T
-    double *U,*S,*V_T;
-    CHECK(cudaMalloc(&U, n*n*sizeof(double)));
-    CHECK(cudaMalloc(&S, m*sizeof(double)));
-    CHECK(cudaMalloc(&V_T, m*m*sizeof(double)));
-
-    //Calculate SVD with cuSOLVER
-
-    double *Acopy; //we use a copy of A because apparently gesvd destroys input matrix
-    CHECK(cudaMalloc(&Acopy, n*m*sizeof(double)));
-    CHECK(cudaMemcpy(Acopy, A, n*m*sizeof(double), cudaMemcpyDeviceToDevice));
-
-    int *dev_info, h_dev_info;
-    CHECK(cudaMalloc(&dev_info, sizeof(int)));
-    CHECK_CUSOLVER(cusolverDnDgesvd(cusolverHandle, 'A', 'A', n, m, Acopy, n, S, U, n, V_T, m, buffer, bufferDim, NULL, dev_info));
-    CHECK(cudaMemcpy(&h_dev_info, dev_info, sizeof(int), cudaMemcpyDeviceToHost));
-    if(h_dev_info != 0)
-        printf("Something went wrong (dev_info=%d)\n", h_dev_info);
-
-    //Calculate S^+
-    double *SPseudoInv;
-    CHECK(cudaMalloc(&SPseudoInv, m*n*sizeof(double)));
-    CHECK(cudaMemset(SPseudoInv, 0, m*n*sizeof(double)));
-
-    dim3 dimBlock(BLOCK_SIZE,1,1);
-    dim3 dimGrid(ceil(m*1.0/BLOCK_SIZE),1,1);
-    calculateDiagPseudoInv<<<dimGrid,dimBlock>>>(S, SPseudoInv, n, m);
-    CHECK(cudaDeviceSynchronize());
-
-    //*********************************DEBUG************************************
-
-    double *h_U,*h_S,*h_V_T,*h_SPseudoInv;
-    CHECK(cudaMallocHost(&h_U, n*n*sizeof(double)));
-    CHECK(cudaMallocHost(&h_S, m*sizeof(double)));
-    CHECK(cudaMallocHost(&h_V_T, m*m*sizeof(double)));
-    CHECK(cudaMallocHost(&h_SPseudoInv, m*n*sizeof(double)));
-    CHECK(cudaMemcpy(h_U, U, n*n*sizeof(double), cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(h_S, S, m*sizeof(double), cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(h_V_T, V_T, m*m*sizeof(double), cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(h_SPseudoInv, SPseudoInv, m*n*sizeof(double), cudaMemcpyDeviceToHost));
-
-    printf("\nU:\n");
-    printColumnMajorMatrixForPython(h_U, n, n);
-
-    printf("\nS:\n");
-    printColumnMajorMatrixForPython(h_S, 1, m);
-
-    printf("\nVT:\n");
-    printColumnMajorMatrixForPython(h_V_T, m, m);
-
-    printf("\nSPseudoInv:\n");
-    printColumnMajorMatrixForPython(h_SPseudoInv, m, n);
-    printf("\n");
-
-    //******************************END DEBUG***********************************
-
-    //calculate APseudoInv = V_T^T * S^+ * U^T
-    //APseudoInv = V_T^T * S^+
-    double alpha=1,beta=0;
-    CHECK_CUBLAS(cublasDgemm(cublasHandle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, m, &alpha, V_T, m, SPseudoInv, m, &beta, APseudoInv, m));
-    //APseudoInv *= U^T
-    CHECK_CUBLAS(cublasDgemm(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, n, &alpha, APseudoInv, m, U, n, &beta, APseudoInv, m));
-
-    //Free memory
-    CHECK(cudaFree(buffer));
-    CHECK(cudaFree(U));
-    CHECK(cudaFree(S));
-    CHECK(cudaFree(SPseudoInv));
-    CHECK(cudaFree(V_T));
-    CHECK_CUBLAS(cublasDestroy(cublasHandle));
-    CHECK_CUSOLVER(cusolverDnDestroy(cusolverHandle));
-
-}
-
-void TransposeDebugMoorePenroseInverse(double *A, int n, int m, double *APseudoInv){
-
-    double *AT,*APseudoInvT;
-    CHECK(cudaMalloc(&AT, m*n*sizeof(double)));
-    CHECK(cudaMalloc(&APseudoInvT, n*m*sizeof(double)));
-
-    cublasHandle_t cublasHandle;
-    CHECK_CUBLAS(cublasCreate(&cublasHandle));
-    double alpha = 1, beta = 0;
-
-    //Transpose A
-    CHECK_CUBLAS(cublasDgeam(cublasHandle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, &alpha, A, n, &beta, A, n, AT, m));
-
-    //DEBUG
-    double *h_AT;
-    CHECK(cudaMallocHost(&h_AT, m*n*sizeof(double)));
-    CHECK(cudaMemcpy(h_AT, AT, m*n*sizeof(double), cudaMemcpyDeviceToHost));
-    printf("A^T:\n");
-    printColumnMajorMatrixForPython(h_AT,m,n);
-    printf("\n");
-    //END DEBUG
-
-    //Call MoorePenroseInverse
-    DebugMoorePenroseInverse(AT, m, n, APseudoInvT);
 
     //Transpose APseudoInvT
     CHECK_CUBLAS(cublasDgeam(cublasHandle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, &alpha, APseudoInvT, n, &beta, APseudoInvT, n, APseudoInv, m));
@@ -277,7 +225,7 @@ int CheckPseudoInverse(double *A, int n, int m, double *Apinv){
 
     int i;
     for(i=0; i<n*m; i++)
-        if(fabs(h_A[i] - h_tmp2[i]) > 1e-4){
+        if(fabs(h_A[i] - h_tmp2[i]) > 1e-5){
             printf("at index %d diff is: %f\n",i, h_A[i] - h_tmp2[i]);
             break;
         }

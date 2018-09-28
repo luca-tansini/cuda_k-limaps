@@ -59,3 +59,18 @@ void printHighlightedVector(double *v, int len){
             printf("0.000 ");
     printf("\n");
 }
+
+void printDeviceMatrix(double *d_A, int n, int m, const char *name){
+
+    printf("%s [%dx%d]:\n", name, n, m);
+
+    double *h_A;
+    CHECK(cudaMallocHost(&h_A, n*m*sizeof(double)));
+    CHECK(cudaMemcpy(h_A, d_A, n*m*sizeof(double), cudaMemcpyDeviceToHost));
+    printColumnMajorMatrixForPython(h_A, n, m);
+    printf("\n");
+
+    CHECK(cudaFreeHost(h_A));
+    return;
+
+}
