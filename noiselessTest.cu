@@ -1,99 +1,41 @@
 #include "k-LiMapS.cu"
 #include "MoorePenrose.cu"
-#include <curand.h>
-#include <curand_kernel.h>
+#include "createDict.cu"
 
-#define BLOCK_SIZE 256
+/*
+Function calculating MSE: sum((s - D * alphalimaps)^2)/n
+*/
+double MSE(double *s, double *D, double *alpa, int n, int m){
 
-__global__ void normfill(double *D, int len, curandState *states, int seed){
+    int blocks = ceil(n*1.0/BLOCK_SIZE);
+    dim3 dimGrid(blocks,1,1);
+    dim3 dimBlock(BLOCK_SIZE,1,1);
+    double *limapsS,*partialMSEBlocks;
 
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    CHECK(cudaMalloc(&limapsS, blocks*BLOCK_SIZE*sizeof(double)));
+    CHECK(cudaMemset(limapsS, 0, blocks*BLOCK_SIZE*sizeof(double)));
+    CHECK(cudaMallocHost(&partialMSEBlocks, blocks*sizeof(double)));
 
-    if(tid < len){
-        curand_init(tid*seed+seed, 0, 0, &states[tid]);
-        D[tid] = curand_uniform_double(&states[tid]);
-    }
+    //limapsS = D * alphalimaps
+    CHECK_CUBLAS(cublasDgemv(cublasHandle, CUBLAS_OP_N, n, m, &cualpha, D, n, alphalimaps, 1, &cubeta, limapsS, 1));
 
-}
-
-__global__ void divide(double *v, double x, int len){
-
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if(tid < len)
-        v[tid] /= x;
-}
-
-//Function generating the dictionary
-//The values are extracted from a normal distribution (mean 0, stdev 1.0)
-//Then each column is forced to have norm == 1, dividing each element of the column by the column's norm
-void createDict(double *D, int n, int m){
-
-    int blocksperdict = ceil(n*m*1.0/BLOCK_SIZE);
-
-    srand(time(NULL));
-    int seed = rand();
-
-    curandState *devStates;
-    CHECK(cudaMalloc((void **)&devStates, blocksperdict*BLOCK_SIZE*sizeof(curandState)));
-
-    normfill<<<blocksperdict,BLOCK_SIZE>>>(D, n*m, devStates, seed);
+    //limapsS = s - limapsS
+    vectorSum<<<dimGrid,dimBlock>>>(1, s, -1, limapsS, limapsS, n);
     CHECK(cudaDeviceSynchronize());
 
-    double *tmpcol,*partialNormBlocks,norm;
-    int blockspercol = ceil(n*1.0/BLOCK_SIZE);
-    CHECK(cudaMalloc(&tmpcol, blockspercol*BLOCK_SIZE*sizeof(double)));
-    CHECK(cudaMemset(tmpcol, 0, blockspercol*BLOCK_SIZE*sizeof(double)));
-    CHECK(cudaMallocHost(&partialNormBlocks, blockspercol*sizeof(double)));
-
-    for(int i=0; i<m; i++){
-
-        CHECK(cudaMemcpy(tmpcol, &D[i*n], n*sizeof(double), cudaMemcpyDeviceToDevice));
-
-        //CALCOLA NORMA CON vector2norm
-        vector2norm<<<blockspercol,BLOCK_SIZE>>>(tmpcol);
-        CHECK(cudaDeviceSynchronize());
-
-        CHECK(cudaMemcpy(partialNormBlocks, tmpcol, blockspercol*sizeof(double), cudaMemcpyDeviceToHost));
-        norm = 0;
-        for(int j=0; j<blockspercol; j++)
-            norm += partialNormBlocks[j];
-        norm = sqrt(norm);
-
-        //CHIAMA KERNEL CHE DIVIDE OGNI ELEMENTO PER LA NORMA
-        divide<<<blockspercol,BLOCK_SIZE>>>(&D[i*n], norm, n);
-        CHECK(cudaDeviceSynchronize());
-    }
-}
-
-void generateAlpha(double *alpha, int m, int k){
-
-    int blocksperk = ceil(k*1.0/BLOCK_SIZE);
-
-    srand(time(NULL));
-    int seed = rand();
-
-    curandState *devStates;
-    CHECK(cudaMalloc(&devStates, blocksperk*BLOCK_SIZE*sizeof(curandState)));
-
-    double *d_kvalues,h_kvalues[k];
-    CHECK(cudaMalloc(&d_kvalues, k*sizeof(double)));
-
-    normfill<<<blocksperk,BLOCK_SIZE>>>(d_kvalues, k, devStates, seed);
+    vector2norm<<<dimGrid,dimBlock>>>(d_limapsB);
     CHECK(cudaDeviceSynchronize());
-    CHECK(cudaMemcpy(h_kvalues, d_kvalues, k*sizeof(double), cudaMemcpyDeviceToHost));
 
-    double h_alpha[m];
-    memset(h_alpha, 0, m*sizeof(double));
-    for(int i=0; i<k; i++){
-        int idx = rand()%m;
-        if(h_alpha[idx] != 0)
-            i--;
-        else
-            h_alpha[idx] = h_kvalues[i];
-    }
+    CHECK(cudaMemcpy(partialMSEBlocks, d_limapsB, blocks * sizeof(double), cudaMemcpyDeviceToHost));
+    double MSE = 0;
+    for(j=0; j<blocks; j++)
+        MSE += partialMSEBlocks[j];
+    MSE /= n;
 
-    CHECK(cudaMemcpy(alpha, h_alpha, m * sizeof(double), cudaMemcpyHostToDevice));
+    CHECK(cudaFree(limapsS));
+    CHECK(cudaFreeHost(partialMSEBlocks));
 
+    return MSE;
 }
 
 int main(int argc, char **argv){
@@ -126,12 +68,11 @@ int main(int argc, char **argv){
     double *DINV;
     CHECK(cudaMalloc(&DINV, m*n*sizeof(double)));
 
-    HostMoorePenroseInverse(D, n, m, DINV);
-
-    if(!CheckPseudoInverse(D, n, m, DINV))
-        printf("Something went wrong with the Moore-Penrose pseudoinverse!\n");
-
+    JacobiMoorePenroseInverse(D, n, m, DINV);
     printf("done\n");
+
+    if(!CheckPseudoinverse(D, n, m, DINV))
+        printf("Something went wrong with the Moore-Penrose pseudoinverse!\n");
 
     //GENERA ALPHAOPT
     printf("generating alphaopt...");
@@ -141,8 +82,8 @@ int main(int argc, char **argv){
     generateAlpha(alphaopt, m, k);
     printf("done\n");
 
-    //CALCOLA S = D * alphaopt
-    printf("computing S = D * alphaopt...");
+    //CALCOLA s = D * alphaopt
+    printf("computing s = D * alphaopt...");
     double *s;
     CHECK(cudaMalloc(&s, n*sizeof(double)));
 
@@ -185,6 +126,8 @@ int main(int argc, char **argv){
         printHighlightedVector(h_alphalimaps, m);
         printf("\n");
     }
+
+    printf("MSE: %f\n", MSE(s,D,alphalimaps,n,m));
 
     //FREE
     CHECK(cudaFree(D));

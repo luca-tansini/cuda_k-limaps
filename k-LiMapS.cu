@@ -66,15 +66,107 @@ __global__ void vector2norm(double *v){
 Function implementing the k-LiMapS algorithm.
 Parameters description:
     k: sparsity level
-    theta: the dictionary € R^(n*m)
-    thetaPseudoInv: the pseudo inverse of the dictionary (€ R^(m*n))
-    b: the signal € R^n
+    D: the dictionary € R^(n*m)
+    DINV: the pseudo inverse of the dictionary (€ R^(m*n))
+    s: the signal € R^n
     alpha: the output vector € R^m
     maxIter: a max iteration limit for the internal loop
 All matrices are required to be in column-major format for compatibility with the CUBLAS libraries
-The result is an aproximate solution for b = theta*alpha s.t. lzero-norm(alpha) <= k
+The result is an aproximate solution for s = D*alpha s.t. lzero-norm(alpha) <= k
 */
-void k_LiMapS(int k, double *theta, int n, int m, double *thetaPseudoInv, double *b, double *alpha, int maxIter){
+void devMemK_LiMapS(int k, double *D, int n, int m, double *DINV, double *s, double *alpha, int maxIter){
+
+    //Create the cublas handle
+    cublasHandle_t handle;
+	CHECK_CUBLAS(cublasCreate(&handle));
+
+    //calculate initial alpha = D * s
+    double cuAlpha = 1, cuBeta = 0;
+    CHECK_CUBLAS(cublasDgemv(handle, CUBLAS_OP_N, m, n, &cuAlpha, DINV, m, s, 1, &cuBeta, alpha, 1));
+
+    //algorithm internal loop
+    int i = 0;
+    int mBlocks = ceil(m*1.0/BLOCK_SIZE);
+    double sigma[m],partialNormBlocks[mBlocks];
+    double *beta,*oldalpha,*tmp;
+    dim3 dimBlock(BLOCK_SIZE,1,1);
+    dim3 dimGridM(mBlocks,1,1);
+    dim3 dimGridN(ceil(n*1.0/BLOCK_SIZE),1,1);
+
+    CHECK(cudaMalloc(&beta, m*sizeof(double)));
+    CHECK(cudaMalloc(&oldalpha, mBlocks*BLOCK_SIZE*sizeof(double)));
+    CHECK(cudaMemset(oldalpha, 0, mBlocks*BLOCK_SIZE*sizeof(double)));
+    CHECK(cudaMalloc(&tmp, m*sizeof(double)));
+
+    while(i < maxIter){
+
+        //1a. retrieve alpha into sigma
+        CHECK_CUBLAS(cublasGetVector(m, sizeof(double), alpha, 1, sigma, 1));
+        //1b. sort absolute values of sigma in descending order
+        for(int j=0; j<m; j++)
+            sigma[j] = fabs(sigma[j]);
+        qsort(sigma, m, sizeof(double), comp);
+
+        //2. calculate lambda = 1/sigma[k]
+        double lambda = 1/sigma[k];
+
+        //3. calculate beta = F(lambda, alpha)
+        fShrinkage<<<dimGridM,dimBlock>>>(lambda, alpha, beta, m);
+        CHECK(cudaDeviceSynchronize());
+
+        //4. update alpha = beta - DINV * (D * beta - s)
+        //using aplha for intermediate results (alpha has size m and m >> n)
+
+        //save oldalpha
+        CHECK(cudaMemcpy(oldalpha, alpha, m*sizeof(double), cudaMemcpyDeviceToDevice));
+
+        //alpha = D * beta (€ R^n)
+        CHECK_CUBLAS(cublasDgemv(handle, CUBLAS_OP_N, n, m, &cuAlpha, D, n, beta, 1, &cuBeta, alpha, 1));
+
+        //alpha = alpha - s (€ R^n)
+        vectorSum<<<dimGridN,dimBlock>>>(1, alpha, -1, s, alpha, n);
+        CHECK(cudaDeviceSynchronize());
+
+        //tmp = DINV * alpha (€ R^m)
+        CHECK_CUBLAS(cublasDgemv(handle, CUBLAS_OP_N, m, n, &cuAlpha, DINV, m, alpha, 1, &cuBeta, tmp, 1));
+
+        //alpha = beta - tmp (€ R^m)
+        vectorSum<<<dimGridM,dimBlock>>>(1, beta, -1, tmp, alpha, m);
+        CHECK(cudaDeviceSynchronize());
+
+        //loop conditions update
+        vectorSum<<<dimGridM,dimBlock>>>(1, alpha, -1, oldalpha, oldalpha, m);
+        CHECK(cudaDeviceSynchronize());
+        vector2norm<<<dimGridM,dimBlock>>>(oldalpha);
+        CHECK(cudaDeviceSynchronize());
+        CHECK(cudaMemcpy(partialNormBlocks, oldalpha, mBlocks * sizeof(double), cudaMemcpyDeviceToHost));
+        double norm = 0;
+        for(int j=0; j<mBlocks; j++)
+            norm += partialNormBlocks[j];
+        norm = sqrt(norm);
+        if(norm <= 1e-5){
+            break;
+        }
+        i++;
+    }
+
+    //final thresholding step: alpha[i] = 0 if |alpha[i]| <= sigma[k]
+    thresholding<<<dimGridM,dimBlock>>>(alpha, m, sigma[k]);
+    CHECK(cudaDeviceSynchronize());
+
+    //Free Memory
+    CHECK(cudaFree(oldalpha));
+    CHECK(cudaFree(beta));
+    CHECK(cudaFree(tmp));
+    CHECK_CUBLAS(cublasDestroy(handle));
+
+}
+
+/*
+Function implementing the k-LiMapS algorithm.
+Same as the other one, but parameters are host memory pointers
+
+void k_LiMapSHostMem(int k, double *theta, int n, int m, double *thetaPseudoInv, double *b, double *alpha, int maxIter){
 
     //Create the cublas handle
     cublasHandle_t handle;
@@ -176,93 +268,4 @@ void k_LiMapS(int k, double *theta, int n, int m, double *thetaPseudoInv, double
     CHECK_CUBLAS(cublasDestroy(handle));
 
 }
-
-/*
-Function implementing the k-LiMapS algorithm.
-Same as the other one, but parameters are device memory pointers
 */
-void devMemK_LiMapS(int k, double *theta, int n, int m, double *thetaPseudoInv, double *b, double *alpha, int maxIter){
-
-    //Create the cublas handle
-    cublasHandle_t handle;
-	CHECK_CUBLAS(cublasCreate(&handle));
-
-    //calculate initial alpha = thetaPseudoInv * b
-    double cuAlpha = 1, cuBeta = 0;
-    CHECK_CUBLAS(cublasDgemv(handle, CUBLAS_OP_N, m, n, &cuAlpha, thetaPseudoInv, m, b, 1, &cuBeta, alpha, 1));
-
-    //algorithm internal loop
-    int i = 0;
-    int mBlocks = ceil(m*1.0/BLOCK_SIZE);
-    double sigma[m],partialNormBlocks[mBlocks];
-    double *beta,*oldalpha;
-    dim3 dimBlock(BLOCK_SIZE,1,1);
-    dim3 dimGridM(mBlocks,1,1);
-    dim3 dimGridN(ceil(n*1.0/BLOCK_SIZE),1,1);
-
-    CHECK(cudaMalloc(&beta, m*sizeof(double)));
-    CHECK(cudaMalloc(&oldalpha, mBlocks*BLOCK_SIZE*sizeof(double)));
-    CHECK(cudaMemset(oldalpha, 0, mBlocks*BLOCK_SIZE*sizeof(double)));
-
-    while(i < maxIter){
-
-        //1a. retrieve alpha into sigma
-        CHECK_CUBLAS(cublasGetVector(m, sizeof(double), alpha, 1, sigma, 1));
-        //1b. sort absolute values of sigma in descending order
-        for(int j=0; j<m; j++)
-            sigma[j] = fabs(sigma[j]);
-        qsort(sigma, m, sizeof(double), comp);
-
-        //2. calculate lambda = 1/sigma[k]
-        double lambda = 1/sigma[k];
-
-        //3. calculate beta = F(lambda, alpha)
-        fShrinkage<<<dimGridM,dimBlock>>>(lambda, alpha, beta, m);
-        CHECK(cudaDeviceSynchronize());
-
-        //4. update alpha = beta - thetaPseudoInv * (theta * beta - b)
-        //using aplha for intermediate results (alpha has size m and m >> n)
-
-        //save oldalpha
-        CHECK(cudaMemcpy(oldalpha, alpha, m*sizeof(double), cudaMemcpyDeviceToDevice));
-
-        //alpha = theta * beta (€ R^n)
-        CHECK_CUBLAS(cublasDgemv(handle, CUBLAS_OP_N, n, m, &cuAlpha, theta, n, beta, 1, &cuBeta, alpha, 1));
-
-        //alpha = alpha - b (€ R^n)
-        vectorSum<<<dimGridN,dimBlock>>>(1, alpha, -1, b, alpha, n);
-        CHECK(cudaDeviceSynchronize());
-
-        //alpha = thetaPseudoInv * alpha (€ R^m)
-        CHECK_CUBLAS(cublasDgemv(handle, CUBLAS_OP_N, m, n, &cuAlpha, thetaPseudoInv, m, alpha, 1, &cuBeta, alpha, 1));
-
-        //alpha = beta - alpha (€ R^m)
-        vectorSum<<<dimGridM,dimBlock>>>(1, beta, -1, alpha, alpha, m);
-        CHECK(cudaDeviceSynchronize());
-
-        //loop conditions update
-        vectorSum<<<dimGridM,dimBlock>>>(1, alpha, -1, oldalpha, oldalpha, m);
-        CHECK(cudaDeviceSynchronize());
-        vector2norm<<<dimGridM,dimBlock>>>(oldalpha);
-        CHECK(cudaDeviceSynchronize());
-        CHECK(cudaMemcpy(partialNormBlocks, oldalpha, mBlocks * sizeof(double), cudaMemcpyDeviceToHost));
-        double norm = 0;
-        for(int j=0; j<mBlocks; j++)
-            norm += partialNormBlocks[j];
-        norm = sqrt(norm);
-        if(norm <= 1e-5){
-            break;
-        }
-        i++;
-    }
-
-    //final thresholding step: alpha[i] = 0 if |alpha[i]| <= sigma[k]
-    thresholding<<<dimGridM,dimBlock>>>(alpha, m, sigma[k]);
-    CHECK(cudaDeviceSynchronize());
-
-    //Free Memory
-    CHECK(cudaFree(oldalpha));
-    CHECK(cudaFree(beta));
-    CHECK_CUBLAS(cublasDestroy(handle));
-
-}

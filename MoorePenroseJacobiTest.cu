@@ -32,7 +32,7 @@ int main(int argc, char **argv){
     printf("elapsed time: %fs\n",seconds() - t);
 
     //Check result
-    if(CheckPseudoInverse(d_A, n, m, d_Apinv)){
+    if(CheckPseudoinverse(d_A, n, m, d_Apinv)){
         printf("OK\n");
     }
     else{
