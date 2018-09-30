@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <cublas_v2.h>
+#include "vectorUtility.cu"
 
 #ifndef _COMMON_H
     #include "common.h"
@@ -27,39 +28,12 @@ __global__ void fShrinkage(double lambda, double *a, double *b, int len){
     }
 }
 
-//Kernel implementing: res = alpha * a + beta * b
-__global__ void vectorSum(double alpha, double *a, double beta, double *b, double *res, int len){
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if(tid < len)
-        res[tid] = alpha * a[tid] + beta * b[tid];
-}
-
 //Kernel implementing the final thresholding step
 __global__ void thresholding(double *v, int len, double threshold){
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     if(tid < len)
         if(fabsf(v[tid]) < threshold)
             v[tid] = 0;
-}
-
-//Kernel implementing the 2-norm of a vector (the vector is destroyed after computation, with v[i] being the partial sum of block i)
-__global__ void vector2norm(double *v){
-
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-
-    v[tid] *= v[tid];
-
-    int step = blockDim.x / 2;
-    int idx = threadIdx.x;
-    double *p = v + blockDim.x * blockIdx.x;
-    while(step > 0){
-        if(idx < step)
-            p[idx] = p[idx] + p[idx+step];
-        step /= 2;
-        __syncthreads();
-    }
-    if(idx == 0)
-        v[blockIdx.x] = p[idx];
 }
 
 /*

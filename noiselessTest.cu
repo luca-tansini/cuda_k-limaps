@@ -1,4 +1,5 @@
 #include "k-LiMapS.cu"
+#include "vectorUtility.cu"
 #include "MoorePenrose.cu"
 #include "createDict.cu"
 
