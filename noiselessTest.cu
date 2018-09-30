@@ -3,46 +3,10 @@
 #include "MoorePenrose.cu"
 #include "createDict.cu"
 
-/*
-Function calculating MSE: sum((s - D * alphalimaps)^2)/n
-*/
-double MSE(double *s, double *D, double *alpa, int n, int m){
-
-    int blocks = ceil(n*1.0/BLOCK_SIZE);
-    dim3 dimGrid(blocks,1,1);
-    dim3 dimBlock(BLOCK_SIZE,1,1);
-    double *limapsS,*partialMSEBlocks;
-
-    CHECK(cudaMalloc(&limapsS, blocks*BLOCK_SIZE*sizeof(double)));
-    CHECK(cudaMemset(limapsS, 0, blocks*BLOCK_SIZE*sizeof(double)));
-    CHECK(cudaMallocHost(&partialMSEBlocks, blocks*sizeof(double)));
-
-    //limapsS = D * alphalimaps
-    CHECK_CUBLAS(cublasDgemv(cublasHandle, CUBLAS_OP_N, n, m, &cualpha, D, n, alphalimaps, 1, &cubeta, limapsS, 1));
-
-    //limapsS = s - limapsS
-    vectorSum<<<dimGrid,dimBlock>>>(1, s, -1, limapsS, limapsS, n);
-    CHECK(cudaDeviceSynchronize());
-
-    vector2norm<<<dimGrid,dimBlock>>>(d_limapsB);
-    CHECK(cudaDeviceSynchronize());
-
-    CHECK(cudaMemcpy(partialMSEBlocks, d_limapsB, blocks * sizeof(double), cudaMemcpyDeviceToHost));
-    double MSE = 0;
-    for(j=0; j<blocks; j++)
-        MSE += partialMSEBlocks[j];
-    MSE /= n;
-
-    CHECK(cudaFree(limapsS));
-    CHECK(cudaFreeHost(partialMSEBlocks));
-
-    return MSE;
-}
-
 int main(int argc, char **argv){
 
-    if(argc != 2){
-        printf("usage: noiselessTest <n>\n");
+    if(argc != 3){
+        printf("usage: noiselessTest <n> <k>\n");
         return 2;
     }
 
@@ -50,7 +14,7 @@ int main(int argc, char **argv){
 
     int n = atoi(argv[1]);
     int m = 2*n;
-    int k = n/4;
+    int k = atoi(argv[2]);
 
     //DEBUG
     printf("n:%d\tm:%d\tk:%d\n",n,m,k);
@@ -116,17 +80,8 @@ int main(int argc, char **argv){
             break;
     if(i == m)
         printf("ALL GOOD\n");
-    else{
+    else
         printf("SOMETHING WENT WRONG!\n");
-
-        printf("alphaopt:\n");
-        printHighlightedVector(h_alphaopt, m);
-        printf("\n");
-
-        printf("alphalimaps:\n");
-        printHighlightedVector(h_alphalimaps, m);
-        printf("\n");
-    }
 
     printf("MSE: %f\n", MSE(s,D,alphalimaps,n,m));
 
