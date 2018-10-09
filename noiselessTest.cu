@@ -5,14 +5,16 @@
 
 int main(int argc, char **argv){
 
-    if(argc != 3){
-        printf("usage: noiselessTest <n> <k>\n");
+    if(argc != 2){
+        printf("usage: noiselessTest <n>\n");
         return 2;
     }
 
     setbuf(stdout, NULL);
 
     int n = atoi(argv[1]);
+
+    printf("    n|     m|  delta|     k|    rho|  succ%%|       avgMSE      |  avgTime |\n");
 
     //ALLOCATE MEMORY POINTERS
     double *D,*DINV,*alphaopt,*s,*alphalimaps,*h_alphalimaps,*h_alphaopt;
@@ -23,7 +25,7 @@ int main(int argc, char **argv){
     CHECK_CUBLAS(cublasCreate(&cublasHandle));
     double cualpha=1,cubeta=0;
 
-    //CICLO SU M
+    //CICLO SU M DA N A 2N, STEP 10%N
     for(int m = n; m <= 2*n; m += n/10){
 
         //CREA DIZIONARIO
@@ -42,9 +44,18 @@ int main(int argc, char **argv){
         CHECK(cudaMallocHost(&h_alphaopt, m*sizeof(double)));
         CHECK(cudaMallocHost(&h_alphalimaps, m*sizeof(double)));
 
-        //CICLO SU K e iters
+        //CICLO SU K DA N/10 A N/2, STEP 5%N
         for(int k=n/10; k<=n/2; k+=n/20){
-            for(int iters=0; iters<50; iters++){
+
+            int iters;
+            int succ = 0;
+            double avgMSE = 0;
+            double avgTime = 0;
+
+            //n, m, delta, k, rho
+            printf("% 5d| % 5d| % 6.2f| % 5d| % 6.2f| ", n, m, n*1.0/m, k, k*1.0/n);
+
+            for(iters=0; iters<50; iters++){
 
                 //GENERA alphaopt
                 generateAlpha(alphaopt, m, k);
@@ -53,7 +64,9 @@ int main(int argc, char **argv){
                 CHECK_CUBLAS(cublasDgemv(cublasHandle, CUBLAS_OP_N, n, m, &cualpha, D, n, alphaopt, 1, &cubeta, s, 1));
 
                 //CHIAMA K_LiMapS
+                double t=seconds();
                 devMemK_LiMapS(k, D, n, m, DINV, s, alphalimaps, 1000);
+                avgTime += seconds() - t;
 
                 //CHECK DEL RISULTATO
                 CHECK(cudaMemcpy(h_alphaopt, alphaopt, m*sizeof(double), cudaMemcpyDeviceToHost));
@@ -64,13 +77,18 @@ int main(int argc, char **argv){
                     if(fabs(h_alphaopt[i] - h_alphalimaps[i]) > 1e-3)
                         break;
                 if(i == m)
-                    printf("ALL GOOD\n");
-                else
-                    printf("SOMETHING WENT WRONG!\n");
+                    succ++;
 
-                printf("MSE: %f\n", MSE(s,D,alphalimaps,n,m));
+                avgMSE += MSE(s,D,alphalimaps,n,m);
 
             }
+
+            avgMSE  /= iters;
+            avgTime /= iters;
+
+            //succ, avgMSE, avgTime
+            printf("%.2f| % 16.15f| % 7.6f|\n", succ*100.0/50, avgMSE, avgTime);
+
         }
 
         CHECK(cudaFree(D));

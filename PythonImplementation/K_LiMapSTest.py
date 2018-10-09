@@ -17,7 +17,7 @@ def k_LiMapS_noiselessTest(n,maxIter):
         mres = []
         for k in range(math.ceil(n/10),n//2+1,math.ceil(n/10)):
             meanMSE = 0
-            for i in range(100):
+            for i in range(50):
 
                 #Randomly generate optimal solution alpha
                 values = np.random.rand(k)
