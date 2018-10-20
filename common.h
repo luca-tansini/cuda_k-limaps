@@ -1,6 +1,7 @@
 #include <sys/time.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <cublas_v2.h>
 
 #ifndef _COMMON_H
 #define _COMMON_H

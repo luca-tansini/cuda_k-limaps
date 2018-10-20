@@ -32,6 +32,28 @@ void printColumnMajorMatrixForPython(double *A, int nrows, int ncols){
     printf("]\n\n");
 }
 
+void printColumnMajorMatrixForPythonWithPrecision(double *A, int nrows, int ncols, int precision){
+    int i,j;
+    if(precision < 1 || precision > 32) return;
+    char s[8],s1[8];
+    snprintf(s, 8, "%%.%df", precision);
+    snprintf(s1, 8, "%%.%df,", precision);
+    printf("[");
+    for(i=0; i<nrows; i++){
+        printf("[");
+        for(j=0; j<ncols; j+=1)
+            if(j == ncols-1)
+                printf(s, A[j*nrows + i]);
+            else
+                printf(s1, A[j*nrows + i]);
+        if(i == nrows-1)
+            printf("]");
+        else
+            printf("],");
+    }
+    printf("]\n\n");
+}
+
 void printRowMajorMatrixForPython(double *A, int nrows, int ncols){
     int i,j;
     printf("[");

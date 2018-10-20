@@ -4,8 +4,6 @@
 #ifndef _VECTOR_UTIL_CU_
 #define _VECTOR_UTIL_CU_
 
-
-
 //Kernel implementing: res = alpha * a + beta * b
 __global__ void vectorSum(double alpha, double *a, double beta, double *b, double *res, int len){
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -13,24 +11,52 @@ __global__ void vectorSum(double alpha, double *a, double beta, double *b, doubl
         res[tid] = alpha * a[tid] + beta * b[tid];
 }
 
-//Kernel implementing the 2-norm of a vector (the vector is destroyed after computation, with v[i] being the partial sum of block i)
-__global__ void vector2norm(double *v){
+/*
+Kernel implementing part of the Euclidean norm of a vector.
+Computes the square of each element and blockwise parallel reduction sum.
+The sum of block i is left in v[i * BLOCK_SIZE].
+*/
+__global__ void normKernel(double *v, int len){
+
+    __shared__ double SMEM[BLOCK_SIZE];
 
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int idx = threadIdx.x;
 
-    v[tid] *= v[tid];
+    if(tid < len)
+        SMEM[idx] = v[tid] * v[tid];
+    else
+        SMEM[idx] = 0;
+    __syncthreads();
 
     int step = blockDim.x / 2;
-    int idx = threadIdx.x;
-    double *p = v + blockDim.x * blockIdx.x;
     while(step > 0){
         if(idx < step)
-            p[idx] = p[idx] + p[idx+step];
+            SMEM[idx] = SMEM[idx] + SMEM[idx+step];
         step /= 2;
         __syncthreads();
     }
     if(idx == 0)
-        v[blockIdx.x] = p[idx];
+        v[tid] = SMEM[idx];
+}
+
+/*
+Function calculating the Euclidean norm of a vector
+the vector v is destroyed during computation
+*/
+double vectorNorm(double *v, int len){
+
+    int blocks = ceil(len*1.0/BLOCK_SIZE);
+
+    normKernel<<<blocks,BLOCK_SIZE>>>(v,len);
+    CHECK(cudaDeviceSynchronize());
+
+    double blockres,res = 0;
+    for(int i=0; i<blocks; i++){
+        CHECK(cudaMemcpy(&blockres, v+i*BLOCK_SIZE, sizeof(double), cudaMemcpyDeviceToHost));
+        res += blockres;
+    }
+    return sqrt(res);
 }
 
 /*
@@ -41,11 +67,9 @@ double MSE(double *s, double *D, double *alpha, int n, int m){
     int blocks = ceil(n*1.0/BLOCK_SIZE);
     dim3 dimGrid(blocks,1,1);
     dim3 dimBlock(BLOCK_SIZE,1,1);
-    double *limapsS,*partialMSEBlocks;
+    double *limapsS,partialMSE;
 
-    CHECK(cudaMalloc(&limapsS, blocks*BLOCK_SIZE*sizeof(double)));
-    CHECK(cudaMemset(limapsS, 0, blocks*BLOCK_SIZE*sizeof(double)));
-    CHECK(cudaMallocHost(&partialMSEBlocks, blocks*sizeof(double)));
+    CHECK(cudaMalloc(&limapsS, n*sizeof(double)));
 
     //Initialize cublas
     double cualpha=1,cubeta=0;
@@ -59,17 +83,17 @@ double MSE(double *s, double *D, double *alpha, int n, int m){
     vectorSum<<<dimGrid,dimBlock>>>(1, s, -1, limapsS, limapsS, n);
     CHECK(cudaDeviceSynchronize());
 
-    vector2norm<<<dimGrid,dimBlock>>>(limapsS);
+    normKernel<<<dimGrid,dimBlock>>>(limapsS, n);
     CHECK(cudaDeviceSynchronize());
 
-    CHECK(cudaMemcpy(partialMSEBlocks, limapsS, blocks * sizeof(double), cudaMemcpyDeviceToHost));
     double MSE = 0;
-    for(int j=0; j<blocks; j++)
-        MSE += partialMSEBlocks[j];
+    for(int i=0; i<blocks; i++){
+        CHECK(cudaMemcpy(&partialMSE, limapsS+i*BLOCK_SIZE, sizeof(double), cudaMemcpyDeviceToHost));
+        MSE += partialMSE;
+    }
     MSE /= n;
 
     CHECK(cudaFree(limapsS));
-    CHECK(cudaFreeHost(partialMSEBlocks));
 
     return MSE;
 }

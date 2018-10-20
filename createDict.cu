@@ -23,12 +23,15 @@ __global__ void divide(double *v, double x, int len){
 
 }
 
-//Function generating the dictionary
-//The values are extracted from a normal distribution (mean 0, stdev 1.0)
-//Then each column is normalized, dividing each element by the column's norm
+/*
+Function generating the dictionary
+The values are extracted from a normal distribution (mean 0, stdev 1.0)
+Then each column is normalized, dividing each element by the column's norm
+*/
 void createDict(double *D, int n, int m){
 
     int blocksperdict = ceil(n*m*1.0/BLOCK_SIZE);
+    int blockspercol = ceil(n*1.0/BLOCK_SIZE);
 
     srand(time(NULL));
     int seed = rand();
@@ -39,25 +42,16 @@ void createDict(double *D, int n, int m){
     normfill<<<blocksperdict,BLOCK_SIZE>>>(D, n*m, devStates, seed);
     CHECK(cudaDeviceSynchronize());
 
-    double *tmpcol,*partialNormBlocks,norm;
-    int blockspercol = ceil(n*1.0/BLOCK_SIZE);
+    double *tmpcol;
     CHECK(cudaMalloc(&tmpcol, blockspercol*BLOCK_SIZE*sizeof(double)));
-    CHECK(cudaMemset(tmpcol, 0, blockspercol*BLOCK_SIZE*sizeof(double)));
-    CHECK(cudaMallocHost(&partialNormBlocks, blockspercol*sizeof(double)));
 
     for(int i=0; i<m; i++){
 
+        //use a copy because norm computation destroys the vector
         CHECK(cudaMemcpy(tmpcol, &D[i*n], n*sizeof(double), cudaMemcpyDeviceToDevice));
 
-        //CALCOLA NORMA CON vector2norm
-        vector2norm<<<blockspercol,BLOCK_SIZE>>>(tmpcol);
-        CHECK(cudaDeviceSynchronize());
-
-        CHECK(cudaMemcpy(partialNormBlocks, tmpcol, blockspercol*sizeof(double), cudaMemcpyDeviceToHost));
-        norm = 0;
-        for(int j=0; j<blockspercol; j++)
-            norm += partialNormBlocks[j];
-        norm = sqrt(norm);
+        //CALCOLA NORMA
+        double norm = vectorNorm(tmpcol,n);
 
         //CHIAMA KERNEL CHE DIVIDE OGNI ELEMENTO PER LA NORMA
         divide<<<blockspercol,BLOCK_SIZE>>>(&D[i*n], norm, n);
@@ -65,6 +59,10 @@ void createDict(double *D, int n, int m){
     }
 }
 
+/*
+Function generating the k-sparse vector alpha
+The k values are extracted from a normal distribution (mean 0, stdev 1.0)
+*/
 void generateAlpha(double *alpha, int m, int k){
 
     int blocksperk = ceil(k*1.0/BLOCK_SIZE);

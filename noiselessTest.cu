@@ -14,7 +14,7 @@ int main(int argc, char **argv){
 
     int n = atoi(argv[1]);
 
-    printf("    n|     m|  delta|     k|    rho|  succ%%|       avgMSE      |  avgTime |\n");
+    printf("    n|     m| delta|     k|   rho|  succ%%|      avgMSE      | avgTime |\n");
 
     //ALLOCATE MEMORY POINTERS
     double *D,*DINV,*alphaopt,*s,*alphalimaps,*h_alphalimaps,*h_alphaopt;
@@ -25,8 +25,8 @@ int main(int argc, char **argv){
     CHECK_CUBLAS(cublasCreate(&cublasHandle));
     double cualpha=1,cubeta=0;
 
-    //CICLO SU M DA N A 2N, STEP 10%N
-    for(int m = n; m <= 2*n; m += n/10){
+    //CICLO SU M DA N A 5N, STEP N
+    for(int m = n; m <= 5*n; m += n){
 
         //CREA DIZIONARIO
         CHECK(cudaMalloc(&D, n*m*sizeof(double)));
@@ -44,8 +44,9 @@ int main(int argc, char **argv){
         CHECK(cudaMallocHost(&h_alphaopt, m*sizeof(double)));
         CHECK(cudaMallocHost(&h_alphalimaps, m*sizeof(double)));
 
-        //CICLO SU K DA N/10 A N/2, STEP 5%N
-        for(int k=n/10; k<=n/2; k+=n/20){
+        //CICLO SU K DAL 10% DI N AL 50%, STEP 5%
+        for(int l = 10; l<=50; l+=5){
+            int k = n*l/100.0;
 
             int iters;
             int succ = 0;
@@ -53,7 +54,7 @@ int main(int argc, char **argv){
             double avgTime = 0;
 
             //n, m, delta, k, rho
-            printf("% 5d| % 5d| % 6.2f| % 5d| % 6.2f| ", n, m, n*1.0/m, k, k*1.0/n);
+            printf("%5d| %5d| %5.2f| %5d| %5.2f| ", n, m, n*1.0/m, k, k*1.0/n);
 
             for(iters=0; iters<50; iters++){
 
@@ -87,7 +88,7 @@ int main(int argc, char **argv){
             avgTime /= iters;
 
             //succ, avgMSE, avgTime
-            printf("%.2f| % 16.15f| % 7.6f|\n", succ*100.0/50, avgMSE, avgTime);
+            printf("%6.2f| %17.15f| %8.6f|\n", succ*100.0/50, avgMSE, avgTime);
 
         }
 

@@ -1,42 +1,65 @@
 import numpy as np
 import math
 from K_LiMapS import *
+import time
+import sys
 
-#Test with b obtained as b = theta * alpha
-def k_LiMapS_noiselessTest(n,maxIter):
+def k_LiMapS_noiselessTest(n):
 
-    res = []
+    print("    n|     m| delta|     k|   rho|  succ%|      avgMSE      | avgTime |");
     for m in range(n,5*n+1,n):
-        print("\nm={0} , delta={1:.2f}:".format(m,n/m))
-        #Randomly generate dictionary
-        theta = np.random.rand(n,m)
+
+        #Randomly generate dictionary and normalize columns
+        D = np.random.randn(n,m)
+        for i in range(m):
+            D[:,i] /= np.linalg.norm(D[:,i])
 
         #Calculate dictionary pseudoinv
-        thetaPseudoInv = MoorePenrosePseudoInverse(theta,n,m)
+        DINV = np.linalg.pinv(D)
 
-        mres = []
-        for k in range(math.ceil(n/10),n//2+1,math.ceil(n/10)):
-            meanMSE = 0
+        for k in range(math.ceil(n/10),n//2+1,math.ceil(n/20)):
+
+            print("{0:5d}| {1:5d}| {2:5.2f}| {3:5d}| {4:5.2f}| ".format(n,m,n/m,k,k/n), end='')
+
+            avgMSE = 0
+            avgTime = 0
+            succ = 0
             for i in range(50):
 
                 #Randomly generate optimal solution alpha
-                values = np.random.rand(k)
-                alpha = np.append(values,np.zeros(m-k))
-                np.random.shuffle(alpha)
+                values = np.random.randn(k)
+                alphaopt = np.append(values,np.zeros(m-k))
+                np.random.shuffle(alphaopt)
 
-                #Calculate b = theta * alpha
-                b = theta @ alpha
+                #Calculate s = D * alphaopt
+                s = D @ alphaopt
 
                 #Call k_LiMapS
-                limapsSolution = k_LiMapS(k, theta, thetaPseudoInv, b, maxIter)
+                t = time.time()
+                alphalimaps = k_LiMapS(k, D, DINV, s, 1000)
+                avgTime += time.time() - t
 
                 #Calculate MSE
-                diff = b - theta @ limapsSolution
+                diff = s - D @ alphalimaps
                 MSE = sum(diff**2)/n
-                meanMSE += MSE
+                avgMSE += MSE
 
-            meanMSE /= 100
-            print("    k={0} , rho={1} --> MSE medio: {2}".format(k,k/n,meanMSE))
-            mres += [(k,meanMSE)]
-        res += [(m,mres)]
+                #check succ
+                for j in range(m):
+                    if(abs(alphaopt[j] - alphalimaps[j]) > 1e-3):
+                        break
+                if(j == m-1):
+                    succ += 1
+
+            avgMSE  /= 50
+            avgTime /= 50
+            print("{0:6.2f}| {1:17.15f}| {2:8.6f}|".format(succ*100/50, avgMSE, avgTime))
+
     return
+
+if __name__ == '__main__':
+    if(len(sys.argv) != 2):
+        print("usage: noiselessTest <n>")
+        sys.exit(-1)
+    n = int(sys.argv[1])
+    k_LiMapS_noiselessTest(n)
