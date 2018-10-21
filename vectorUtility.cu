@@ -1,4 +1,6 @@
 #include "common.h"
+#include <curand.h>
+#include <curand_kernel.h>
 #define BLOCK_SIZE 256
 
 #ifndef _VECTOR_UTIL_CU_
@@ -96,6 +98,25 @@ double MSE(double *s, double *D, double *alpha, int n, int m){
     CHECK(cudaFree(limapsS));
 
     return MSE;
+}
+
+__global__ void normfill(double *D, int len, curandState *states, int seed){
+
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(tid < len){
+        curand_init(tid*seed+seed, 0, 0, &states[tid]);
+        D[tid] = curand_normal_double(&states[tid]);
+    }
+
+}
+
+__global__ void divide(double *v, double x, int len){
+
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if(tid < len)
+        v[tid] /= x;
+
 }
 
 #endif

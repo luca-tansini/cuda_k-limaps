@@ -1,27 +1,6 @@
-#include <curand.h>
-#include <curand_kernel.h>
 #include "vectorUtility.cu"
 
 #define BLOCK_SIZE 256
-
-__global__ void normfill(double *D, int len, curandState *states, int seed){
-
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(tid < len){
-        curand_init(tid*seed+seed, 0, 0, &states[tid]);
-        D[tid] = curand_uniform_double(&states[tid]);
-    }
-
-}
-
-__global__ void divide(double *v, double x, int len){
-
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if(tid < len)
-        v[tid] /= x;
-
-}
 
 /*
 Function generating the dictionary
@@ -47,15 +26,17 @@ void createDict(double *D, int n, int m){
 
     for(int i=0; i<m; i++){
 
-        //use a copy because norm computation destroys the vector
+        //Copia per il calcolo della norma
         CHECK(cudaMemcpy(tmpcol, &D[i*n], n*sizeof(double), cudaMemcpyDeviceToDevice));
 
-        //CALCOLA NORMA
+        //Calcola norma
         double norm = vectorNorm(tmpcol,n);
 
         //CHIAMA KERNEL CHE DIVIDE OGNI ELEMENTO PER LA NORMA
-        divide<<<blockspercol,BLOCK_SIZE>>>(&D[i*n], norm, n);
-        CHECK(cudaDeviceSynchronize());
+        if(norm != 0){
+            divide<<<blockspercol,BLOCK_SIZE>>>(&D[i*n], norm, n);
+            CHECK(cudaDeviceSynchronize());
+        }
     }
 }
 
