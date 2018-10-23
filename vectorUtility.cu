@@ -6,7 +6,9 @@
 #ifndef _VECTOR_UTIL_CU_
 #define _VECTOR_UTIL_CU_
 
-//Kernel implementing: res = alpha * a + beta * b
+/*
+Kernel che implementa la somma di due vettori, opportunamente scalati: res = alpha * a + beta * b
+*/
 __global__ void vectorSum(double alpha, double *a, double beta, double *b, double *res, int len){
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     if(tid < len)
@@ -14,9 +16,9 @@ __global__ void vectorSum(double alpha, double *a, double beta, double *b, doubl
 }
 
 /*
-Kernel implementing part of the Euclidean norm of a vector.
-Computes the square of each element and blockwise parallel reduction sum.
-The sum of block i is left in v[i * BLOCK_SIZE].
+Kernel che implementa parte del calcolo della norma di un vettore, nello specifico eleva al quadrato tutti gli elementi e fa una parallel reduction sum.
+La somma di ogni blocco i viene messa in v[i * BLOCK_SIZE].
+IMPORTANTE: questo kernel altera il contenuto del vettore in input!
 */
 __global__ void normKernel(double *v, int len){
 
@@ -25,12 +27,14 @@ __global__ void normKernel(double *v, int len){
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int idx = threadIdx.x;
 
+    //Carica il quadrato in shared memory
     if(tid < len)
         SMEM[idx] = v[tid] * v[tid];
     else
         SMEM[idx] = 0;
     __syncthreads();
 
+    //Parallel reduction
     int step = blockDim.x / 2;
     while(step > 0){
         if(idx < step)
@@ -43,8 +47,8 @@ __global__ void normKernel(double *v, int len){
 }
 
 /*
-Function calculating the Euclidean norm of a vector
-the vector v is destroyed during computation
+Funzione per il calcolo della norma euclidea di un vettore.
+Il vettore v viene distrutto durante la computazione!
 */
 double vectorNorm(double *v, int len){
 
@@ -62,7 +66,7 @@ double vectorNorm(double *v, int len){
 }
 
 /*
-Function calculating MSE: sum((s - D * alphalimaps)^2)/n
+Funzione per il calcolo del MSE: sum((s - D * alphalimaps)^2)/n
 */
 double MSE(double *s, double *D, double *alpha, int n, int m){
 
@@ -73,7 +77,7 @@ double MSE(double *s, double *D, double *alpha, int n, int m){
 
     CHECK(cudaMalloc(&limapsS, n*sizeof(double)));
 
-    //Initialize cublas
+    //Inizializza cublas
     double cualpha=1,cubeta=0;
     cublasHandle_t cublasHandle;
     CHECK_CUBLAS(cublasCreate(&cublasHandle));
@@ -100,17 +104,24 @@ double MSE(double *s, double *D, double *alpha, int n, int m){
     return MSE;
 }
 
-__global__ void normfill(double *D, int len, curandState *states, int seed){
+/*
+Kernel che utilizza le librerie cuRAND per riempire un vettore di valori estratti da una distribuzione gaussiana.
+*/
+__global__ void normfill(double *v, int len, curandState *states, int seed){
 
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(tid < len){
         curand_init(tid*seed+seed, 0, 0, &states[tid]);
-        D[tid] = curand_normal_double(&states[tid]);
+        v[tid] = curand_normal_double(&states[tid]);
     }
 
 }
 
+/*
+Kernel che effettua la divisione di ogni elemento del vettore v per x.
+IMPORTANTE: eventuali controlli su x != 0 vanno effettuati prima della chiamata!
+*/
 __global__ void divide(double *v, double x, int len){
 
     int tid = blockIdx.x * blockDim.x + threadIdx.x;

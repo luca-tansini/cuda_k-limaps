@@ -1,6 +1,9 @@
 #include "MoorePenrose.cu"
 #include <stdio.h>
 
+/*
+Questo programma testa l'algoritmo per il calcolo della pseudoinversa di MoorePenrose che utilizza il metodo gesvd. La libreria cuSOLVER richiede che n sia >= ad m.
+*/
 int main(int argc, char **argv){
 
     int n,m,i;
@@ -31,12 +34,12 @@ int main(int argc, char **argv){
 
     CHECK(cudaMemcpy(d_A, A, n*m*sizeof(double), cudaMemcpyHostToDevice));
 
-    //call MoorePenrose
+    //Chiama MoorePenroseInverse
     double t = seconds();
     MoorePenroseInverse(d_A, n, m, d_Apinv);
     printf("elapsed time: %fs\n",seconds() - t);
 
-    //Check result
+    //Controllo del risultato
     if(CheckPseudoinverse(d_A, n, m, d_Apinv)){
         printf("OK\n");
     }

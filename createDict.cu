@@ -3,9 +3,9 @@
 #define BLOCK_SIZE 256
 
 /*
-Function generating the dictionary
-The values are extracted from a normal distribution (mean 0, stdev 1.0)
-Then each column is normalized, dividing each element by the column's norm
+Funzione che genera il dizionario D
+I valori sono estratti dalla distribuzione gaussiana (media 0, stdev 1.0)
+Ogni colonna è normalizzata (dividendo ogni elemento per la norma della colonna)
 */
 void createDict(double *D, int n, int m){
 
@@ -32,7 +32,7 @@ void createDict(double *D, int n, int m){
         //Calcola norma
         double norm = vectorNorm(tmpcol,n);
 
-        //CHIAMA KERNEL CHE DIVIDE OGNI ELEMENTO PER LA NORMA
+        //Chiama kernel che divide ogni elemento della colonna per la norma
         if(norm != 0){
             divide<<<blockspercol,BLOCK_SIZE>>>(&D[i*n], norm, n);
             CHECK(cudaDeviceSynchronize());
@@ -41,8 +41,8 @@ void createDict(double *D, int n, int m){
 }
 
 /*
-Function generating the k-sparse vector alpha
-The k values are extracted from a normal distribution (mean 0, stdev 1.0)
+Funzione che genera il vettore k-sparso alpha
+I k valori sono estratti da una distribuzione normale (media 0, stdev 1.0)
 */
 void generateAlpha(double *alpha, int m, int k){
 
