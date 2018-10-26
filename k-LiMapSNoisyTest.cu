@@ -101,10 +101,18 @@ int main(int argc, char **argv){
 
                 int i;
                 for(i=0; i<m; i++)
-                    if(fabs(h_alphaopt[i] - h_alphalimaps[i]) > 1e-3)
+                    if(h_alphaopt[i] == 0 && h_alphalimaps[i] != 0 || h_alphaopt[i] != 0 && fabs(h_alphaopt[i] - h_alphalimaps[i]) > 1e-1)
                         break;
                 if(i == m)
                     succ++;
+
+                //DEBUG
+                int bug = 0;
+                for(i=0;i<m;i++)
+                    if(h_alphalimaps[i] != 0) bug++;
+                if(bug != k)
+                    printf("AAAAAA %d\n",bug);
+                //END DEBUG
 
                 //Calcola MSE
                 avgMSE += MSE(s,D,alphalimaps,n,m);

@@ -49,11 +49,16 @@ def k_LiMapS_noiselessTest(n):
                 avgMSE += MSE
 
                 #check succ
+                succ += 1
                 for j in range(m):
-                    if(abs(alphaopt[j] - alphalimaps[j]) > 1e-3):
-                        break
-                if(j == m-1):
-                    succ += 1
+                    if(alphaopt[j] == 0 and alphalimaps[j] != 0 or alphaopt[i] != 0 and abs(alphaopt[i] - alphalimaps[i]) > 1e-1):
+                        succ -= 1
+                        break;
+
+                #check more than k nonzero
+                if(len(alphalimaps.nonzero()[0].tolist()) != k):
+                    print(len(alphalimaps.nonzero()[0].tolist()))
+                    print("AAAAAA")
 
             avgMSE  /= 50
             avgTime /= 50

@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <math.h>
 #include "vectorUtility.cu"
+#include <float.h>
 
 #ifndef _COMMON_H
     #include "common.h"
@@ -31,7 +32,7 @@ __global__ void fShrinkage(double lambda, double *a, double *b, int len){
 __global__ void thresholding(double *v, int len, double threshold){
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     if(tid < len)
-        if(fabsf(v[tid]) < threshold)
+        if(fabsf(v[tid]) <= threshold+1e-8)
             v[tid] = 0;
 }
 
@@ -118,7 +119,15 @@ void k_LiMapS(int k, double *D, int n, int m, double *DINV, double *s, double *a
         i++;
     }
 
-    //step finale di thresholding: alpha[i] = 0 if |alpha[i]| <= sigma[k]
+    //Step finale di thresholding: alpha[i] = 0 if |alpha[i]| <= sigma[k]
+
+    //Recupera alpha dalla memoria device in sigma (host)
+    CHECK_CUBLAS(cublasGetVector(m, sizeof(double), alpha, 1, sigma, 1));
+    //Ordina i valori assoluti di sigma in ordine decrescente
+    for(int j=0; j<m; j++)
+        sigma[j] = fabs(sigma[j]);
+    qsort(sigma, m, sizeof(double), comp);
+
     thresholding<<<dimGridM,dimBlock>>>(alpha, m, sigma[k]);
     CHECK(cudaDeviceSynchronize());
 
