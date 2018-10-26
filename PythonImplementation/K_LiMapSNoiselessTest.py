@@ -7,7 +7,7 @@ import sys
 def k_LiMapS_noiselessTest(n):
 
     print("    n|     m| delta|     k|   rho|  succ%|      avgMSE      | avgTime |");
-    for m in range(n,5*n+1,n):
+    for m in range(n,10*n+1,n):
 
         #Randomly generate dictionary and normalize columns
         D = np.random.randn(n,m)

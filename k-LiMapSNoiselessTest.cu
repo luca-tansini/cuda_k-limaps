@@ -8,7 +8,7 @@ Questo programma esegue i test "noiseless" per l'algoritmo k-LiMapS
 Il dizionario D e il vettore k-sparso alphaopt vengono generati in GPU a partire da una distribuzione gaussiana.
 La pseudoinversa viene calcolata in GPU con l'algoritmo di Jacobi per SVD.
 Il segnale s viene calcolato come s = D * alphaopt.
-Il programma, con numero di righe della matrice n preso in in input da riga di comando, esegue diversi test per valori di m = n,...,5n e k = 10%n,15%n,...,50%n
+Il programma, con numero di righe della matrice n preso in in input da riga di comando, esegue diversi test per valori di m = n,...,10n e k = 10%n,15%n,...,50%n
 Per ogni tripla di valori n,m,k vengono eseguite 50 iterazioni, da cui vengono calcolati alcuni valori come:
     succ%:   una stima di quante volte l'algoritmo k-LiMapS ha prodotto una soluzione approssimata alphalimaps tale che la differenza di ogni elemento tra alphalimaps e alphaopt fosse al più 10^-3
     avgMSE:  la media sulle 50 iterazioni del MeanSquareError tra D*alphaopt e D*alphalimaps
@@ -38,8 +38,8 @@ int main(int argc, char **argv){
     CHECK_CUBLAS(cublasCreate(&cublasHandle));
     double cualpha=1,cubeta=0;
 
-    //Ciclo su m da n a 5n, step n
-    for(int m = n; m <= 5*n; m += n){
+    //Ciclo su m da n a 10n, step n
+    for(int m = n; m <= 10*n; m += n){
 
         //Crea il dizionario
         CHECK(cudaMalloc(&D, n*m*sizeof(double)));
