@@ -10,7 +10,7 @@ La pseudoinversa viene calcolata in GPU con l'algoritmo di Jacobi per SVD.
 Il segnale sNoisy viene calcolato come D * alphaopt + epsilon, dove epsilon è un vettore generato a partire dalla distribuzione gaussiana e scalato di un fattore pari a 10^-4.
 Il programma, con numero di righe della matrice n preso in in input da riga di comando, esegue diversi test per valori di m = n,...,5n e k = 10%n,15%n,...,50%n
 Per ogni tripla di valori n,m,k vengono eseguite 50 iterazioni, da cui vengono calcolati alcuni valori come:
-    succ%:   una stima di quante volte l'algoritmo k-LiMapS ha prodotto una soluzione approssimata alphalimaps tale che la differenza di ogni elemento tra alphalimaps e alphaopt fosse al più 10^-3
+    succ%:   una stima di quante volte l'algoritmo k-LiMapS ha prodotto una soluzione approssimata alphalimaps tale che valesse 0 dove alphaopt valeva 0 e differisse al più 0.1 altrove
     avgMSE:  la media sulle 50 iterazioni del MeanSquareError tra D*alphaopt e D*alphalimaps
     avgTime: la media sulle 50 iterazioni del tempo di calcolo dell'algoritmo k-LiMapS
 Viene generato un nuovo dizionario per ogni valore di m, mentre alphaopt viene estratto ad ogni singola iterazione.
@@ -101,18 +101,10 @@ int main(int argc, char **argv){
 
                 int i;
                 for(i=0; i<m; i++)
-                    if(h_alphaopt[i] == 0 && h_alphalimaps[i] != 0 || h_alphaopt[i] != 0 && fabs(h_alphaopt[i] - h_alphalimaps[i]) > 1e-1)
+                    if(h_alphaopt[i] == 0 && h_alphalimaps[i] != 0 || h_alphaopt[i] != 0 && fabs(h_alphaopt[i] - h_alphalimaps[i]) > 0.1)
                         break;
                 if(i == m)
                     succ++;
-
-                //DEBUG
-                int bug = 0;
-                for(i=0;i<m;i++)
-                    if(h_alphalimaps[i] != 0) bug++;
-                if(bug != k)
-                    printf("AAAAAA %d\n",bug);
-                //END DEBUG
 
                 //Calcola MSE
                 avgMSE += MSE(s,D,alphalimaps,n,m);

@@ -50,8 +50,9 @@ def k_LiMapS(k, theta, thetaPseudoInv, b, maxIter):
 
     #final thresholding step: alpha[i] = 0 if |alpha[i]| <= sigma[k]
     sigma = sorted(np.abs(alpha))[::-1]
+    thresh = sigma[k]+1e-8
     for i in range(len(alpha)):
-        if abs(alpha[i]) <= sigma[k]+1e-8:
+        if abs(alpha[i]) <= thresh:
             alpha[i] = 0
 
     return alpha

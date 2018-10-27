@@ -3,5 +3,6 @@
 *.txt
 *.ods
 *.csv
-PythonImplementation/__pycache__/*
-TestResults/__pycache__/*
+*.pyc
+*.html
+*.ods

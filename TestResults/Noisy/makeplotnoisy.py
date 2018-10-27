@@ -19,7 +19,7 @@ def readfile(filename):
 if __name__ == '__main__':
 
     if(len(sys.argv) != 5):
-        print("usage: makeplot <cudaTimes> <pythonTimes> <outfile.html> <n>")
+        print("usage: makeplotnoisy <cudaTimes> <pythonTimes> <outfile.html> <n>")
         exit(1)
 
     cuda = readfile(sys.argv[1])
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     ]
 
     layout = go.Layout(
-        title = "k-LiMapS Noiseless Test n = "+sys.argv[4],
+        title = "k-LiMapS noisy test n = "+sys.argv[4],
         scene = {
             'zaxis':{
                 'title':'avgTime (s)',
@@ -43,8 +43,8 @@ if __name__ == '__main__':
             'yaxis':{
                 'title':'δ (n/m)',
                 'tickmode':'array',
-                'tickvals':[0,1,2,3,4,5,6,7,8,9],
-                'ticktext':['1.00','0.50','0.33','0.25','0.20','0.17','0.14','0.12','0.11','0.10']
+                'tickvals':[0,1,2,3,4],
+                'ticktext':['1.00','0.50','0.33','0.25','0.20']
             },
             'xaxis':{
                 'title':'ρ (k/n)',
@@ -54,8 +54,8 @@ if __name__ == '__main__':
             },
             'annotations':[{
                 'x':8,
-                'y':9,
-                'z':cuda[9][8],
+                'y':4,
+                'z':cuda[4][8],
                 'ax':0,
                 'ay':0,
                 'text':"CUDA",
@@ -65,8 +65,8 @@ if __name__ == '__main__':
             },
             {
                 'x':8,
-                'y':9,
-                'z':python[9][8],
+                'y':4,
+                'z':python[4][8],
                 'ax':0,
                 'ay':0,
                 'text':"CPU",
