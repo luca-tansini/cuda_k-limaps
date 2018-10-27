@@ -55,7 +55,7 @@ void k_LiMapS(int k, double *D, int n, int m, double *DINV, double *s, double *a
     cublasHandle_t handle;
 	CHECK_CUBLAS(cublasCreate(&handle));
 
-    //calcolca alpha inizile: alpha = D * s
+    //Calcola alpha inizile: alpha = D * s
     double cuAlpha = 1, cuBeta = 0;
     CHECK_CUBLAS(cublasDgemv(handle, CUBLAS_OP_N, m, n, &cuAlpha, DINV, m, s, 1, &cuBeta, alpha, 1));
 
@@ -76,23 +76,23 @@ void k_LiMapS(int k, double *D, int n, int m, double *DINV, double *s, double *a
     //Ciclo interno dell'algoritmo
     while(i < maxIter){
 
-        //1a. recupera alpha dalla memoria device in sigma (host)
+        //1a. Recupera alpha dalla memoria device in sigma (host)
         CHECK_CUBLAS(cublasGetVector(m, sizeof(double), alpha, 1, sigma, 1));
-        //1b. ordina i valori assoluti di sigma in ordine decrescente
+        //1b. Ordina i valori assoluti di sigma in ordine decrescente
         for(int j=0; j<m; j++)
             sigma[j] = fabs(sigma[j]);
         qsort(sigma, m, sizeof(double), comp);
 
-        //2. calcola lambda = 1/sigma[k]
+        //2. Calcola lambda = 1/sigma[k]
         double lambda = 1/sigma[k];
 
-        //3. calcola beta = F(lambda, alpha)
+        //3. Calcola beta = F(lambda, alpha)
         fShrinkage<<<dimGridM,dimBlock>>>(lambda, alpha, beta, m);
         CHECK(cudaDeviceSynchronize());
 
-        //4. aggiorna alpha = beta - DINV * (D * beta - s)
+        //4. Aggiorna alpha = beta - DINV * (D * beta - s)
 
-        //salva oldalpha
+        //Salva oldalpha
         CHECK(cudaMemcpy(oldalpha, alpha, m*sizeof(double), cudaMemcpyDeviceToDevice));
 
         //alpha = D * beta (€ R^n)
@@ -109,7 +109,7 @@ void k_LiMapS(int k, double *D, int n, int m, double *DINV, double *s, double *a
         vectorSum<<<dimGridM,dimBlock>>>(1, beta, -1, tmp, alpha, m);
         CHECK(cudaDeviceSynchronize());
 
-        //aggiorna le condizioni del ciclo
+        //Aggiorna le condizioni del ciclo
         vectorSum<<<dimGridM,dimBlock>>>(1, alpha, -1, oldalpha, oldalpha, m);
         CHECK(cudaDeviceSynchronize());
         double norm = vectorNorm(oldalpha, m);
@@ -120,7 +120,6 @@ void k_LiMapS(int k, double *D, int n, int m, double *DINV, double *s, double *a
     }
 
     //Step finale di thresholding: alpha[i] = 0 if |alpha[i]| <= sigma[k]
-
     //Recupera alpha dalla memoria device in sigma (host)
     CHECK_CUBLAS(cublasGetVector(m, sizeof(double), alpha, 1, sigma, 1));
     //Ordina i valori assoluti di sigma in ordine decrescente
