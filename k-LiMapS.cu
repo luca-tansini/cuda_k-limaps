@@ -55,7 +55,7 @@ void k_LiMapS(int k, double *D, int n, int m, double *DINV, double *s, double *a
     cublasHandle_t handle;
 	CHECK_CUBLAS(cublasCreate(&handle));
 
-    //Calcola alpha inizile: alpha = D * s
+    //Calcola alpha iniziale: alpha = D * s
     double cuAlpha = 1, cuBeta = 0;
     CHECK_CUBLAS(cublasDgemv(handle, CUBLAS_OP_N, m, n, &cuAlpha, DINV, m, s, 1, &cuBeta, alpha, 1));
 

@@ -4,7 +4,7 @@ from K_LiMapS import *
 import time
 import sys
 
-def k_LiMapS_noiselessTest(n):
+def k_LiMapS_noiselessTest(n,iters=50):
 
     print("    n|     m| delta|     k|   rho|  succ%|      avgMSE      | avgTime |");
     for m in range(n,10*n+1,n):
@@ -24,7 +24,7 @@ def k_LiMapS_noiselessTest(n):
             avgMSE = 0
             avgTime = 0
             succ = 0
-            for i in range(50):
+            for i in range(iters):
 
                 #Randomly generate optimal solution alpha
                 values = np.random.randn(k)
@@ -51,15 +51,15 @@ def k_LiMapS_noiselessTest(n):
                 if(j == m-1):
                     succ += 1
 
-            avgMSE  /= 50
-            avgTime /= 50
-            print("{0:6.2f}| {1:17.15f}| {2:8.6f}|".format(succ*100/50, avgMSE, avgTime))
+            avgMSE  /= iters
+            avgTime /= iters
+            print("{0:6.2f}| {1:17.15f}| {2:8.6f}|".format(succ*100/5, avgMSE, avgTime))
 
     return
 
 if __name__ == '__main__':
     if(len(sys.argv) != 2):
-        print("usage: noiselessTest <n>")
+        print("usage: noiselessTest <n> [<iters>]")
         sys.exit(-1)
     n = int(sys.argv[1])
     k_LiMapS_noiselessTest(n)
